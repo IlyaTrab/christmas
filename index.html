@@ -7,45 +7,40 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Snow Cam">
   <meta name="theme-color" content="#000000">
-
-  <!-- Красивый новогодний шрифт -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&display=swap" rel="stylesheet">
-
   <style>
     html,body {margin:0;height:100%;background:#000;overflow:hidden;}
     #wrap {position:fixed;inset:0;}
     video,canvas {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 
+    /* Кнопки — лаконично */
     #start, #shotBtn {
       position:fixed; left:1rem; right:1rem;
-      padding:1rem 1.25rem; font-size:1.1rem;
+      padding:.9rem 1.1rem; font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       border-radius:.75rem; border:0; background:#fff;
     }
-    #start { bottom:2rem; }
-    #shotBtn { bottom:5.7rem; display:none; } /* появится после старта */
+    #start { bottom:1.6rem; }
+    #shotBtn { bottom:5rem; display:none; }
 
-    #hint {position:fixed;top:1rem;left:1rem;color:#fff;font:14px system-ui, sans-serif;
-           text-shadow:0 1px 2px #000;opacity:.8;z-index:6}
-
-    /* GIF-снеговик: можно двигать и масштабировать */
-    #mascot {
-      position: absolute;
-      left: 1rem;
-      bottom: 5.5rem;
-      width: 28%;
-      max-width: 320px;
-      z-index: 5;
-      display: none;
-      touch-action: none;
-      user-select: none;
-      cursor: grab;
-      --tx: 0px; --ty: 0px; --s: 1;
-      transform: translate(var(--tx), var(--ty)) scale(var(--s));
-      transform-origin: center center;
+    /* Лаконичный заголовок сверху */
+    #brand {
+      position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
+      font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:#fff; letter-spacing:.5px;
+      text-shadow:0 1px 2px rgba(0,0,0,.6);
+      z-index:6; user-select:none; pointer-events:none;
+      opacity:.9;
     }
-    #mascot.dragging { cursor: grabbing; }
+
+    /* Снеговик (GIF) — перетаскивание и pinch-zoom */
+    #mascot {
+      position:absolute; left:1rem; bottom:5rem;
+      width:24%; max-width:280px; z-index:5; display:none;
+      touch-action:none; user-select:none; cursor:grab;
+      --tx:0px; --ty:0px; --s:1;
+      transform:translate(var(--tx),var(--ty)) scale(var(--s));
+      transform-origin:center center;
+    }
+    #mascot.dragging { cursor:grabbing; }
     #mascot img { display:block; width:100%; height:auto; pointer-events:none; }
   </style>
 </head>
@@ -54,49 +49,42 @@
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
-    <!-- Снеговик (GIF). Убедись, что файл лежит по пути assets/snowman.gif -->
-    <div id="mascot">
-      <img id="mascotImg" src="assets/snowman.gif" alt="Снеговик" draggable="false">
-    </div>
+    <!-- Снеговик (GIF). Убедись, что файл лежит в assets/snowman.gif -->
+    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
+  <div id="brand">christmas-spb.ru</div>
   <button id="shotBtn">📸 Сделать фото</button>
   <button id="start">Запустить камеру</button>
-  <div id="hint">Подай доступ к камере — крупные «пушистые» снежинки и перетаскиваемый снеговик. Щипком масштабируй.</div>
 
   <script>
     const startBtn = document.getElementById('start');
     const shotBtn  = document.getElementById('shotBtn');
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const mascot = document.getElementById('mascot');
-    const mascotImg = document.getElementById('mascotImg');
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const video    = document.getElementById('video');
+    const canvas   = document.getElementById('canvas');
+    const ctx      = canvas.getContext('2d', { alpha: true });
+    const mascot   = document.getElementById('mascot');
+    const mascotImg= document.getElementById('mascotImg');
 
-    let flakes = [], running = false, sprites = [];
-    let titleFontReady = false;
+    // ---- компактные "снежинки": меньше и менее пушистые ----
+    let flakes = [], sprites = [], running = false;
 
-    /* ---------- подготовка «пухлых» снежинок как спрайтов ---------- */
-    function makeFlakeSprite(size, softness=0.9, alpha=0.95) {
-      const s = Math.max(8, size|0);
+    function makeFlakeSprite(size){
+      const s = Math.max(10, size|0);
       const off = document.createElement('canvas');
       off.width = off.height = s;
       const c = off.getContext('2d');
-      const g = c.createRadialGradient(s/2, s/2, s*0.1, s/2, s/2, s*0.5);
-      g.addColorStop(0, `rgba(255,255,255,${alpha})`);
-      g.addColorStop(softness, 'rgba(255,255,255,0.15)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
+      // радиальный градиент с коротким мягким краем (менее «пушистый»)
+      const g = c.createRadialGradient(s/2, s/2, s*0.05, s/2, s/2, s*0.42);
+      g.addColorStop(0.0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.6, 'rgba(255,255,255,0.35)');
+      g.addColorStop(1.0, 'rgba(255,255,255,0.00)');
       c.fillStyle = g;
-      c.beginPath(); c.arc(s/2, s/2, s*0.5, 0, Math.PI*2); c.fill();
+      c.beginPath(); c.arc(s/2, s/2, s*0.42, 0, Math.PI*2); c.fill();
       return off;
     }
-
-    function buildSprites() {
-      sprites = [
-        makeFlakeSprite(48, 0.85, 0.95),
-        makeFlakeSprite(36, 0.9, 0.9),
-        makeFlakeSprite(28, 0.92, 0.88)
-      ];
+    function buildSprites(){
+      sprites = [ makeFlakeSprite(16), makeFlakeSprite(14), makeFlakeSprite(12) ];
     }
 
     function resize() {
@@ -109,106 +97,82 @@
 
     function initSnow() {
       const area = canvas.clientWidth * canvas.clientHeight;
-      const base = Math.max(60, Math.floor(area / 20000)); // кол-во крупных снежинок
-      flakes = new Array(base).fill(0).map(() => ({
+      const n = Math.max(70, Math.floor(area / 26000)); // умеренная плотность
+      flakes = new Array(n).fill(0).map(() => ({
         x0: Math.random() * canvas.clientWidth,
-        y: Math.random() * canvas.clientHeight,
-        r: 14 + Math.random() * 26,       // крупные
-        vy: 0.6 + Math.random() * 1.2,    // скорость падения
-        swayAmp: 12 + Math.random() * 18, // амплитуда покачивания
-        theta: Math.random() * Math.PI*2, // фаза
-        swaySpeed: 0.01 + Math.random()*0.02,
+        y:  Math.random() * canvas.clientHeight,
+        r:  6 + Math.random()*6,             // компактный размер
+        vy: 0.7 + Math.random()*1.0,         // скорость падения
+        swayAmp: 6 + Math.random()*10,       // небольшое покачивание
+        theta: Math.random()*Math.PI*2,
+        swaySpeed: 0.012 + Math.random()*0.018,
         sprite: sprites[(Math.random()*sprites.length)|0]
       }));
     }
 
-    function drawTitle() {
-      const w = canvas.clientWidth;
-      const pad = 12;
-      const size = Math.max(22, Math.floor(w * 0.075)); // ~7.5% ширины
-      ctx.save();
-      // Шрифт (дождёмся загрузки при старте)
-      ctx.font = `700 ${size}px "Mountains of Christmas", cursive`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-
-      // Градиент и обводка
-      const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, '#fff7d6');
-      grad.addColorStop(0.5, '#ffecd1');
-      grad.addColorStop(1, '#ffffff');
-
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = 8;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = 'rgba(20,35,80,0.85)';
-      ctx.fillStyle = grad;
-
-      const txt = 'christmas-spb.ru';
-      const x = w / 2;
-      const y = pad;
-      ctx.strokeText(txt, x, y);
-      ctx.fillText(txt, x, y);
-      ctx.restore();
-    }
-
-    function drawSnow(ctxTarget) {
+    function drawSnow(targetCtx) {
       for (const f of flakes) {
         f.theta += f.swaySpeed;
         const x = f.x0 + Math.sin(f.theta) * f.swayAmp;
         f.y += f.vy;
-        // перерождение
-        if (f.y - f.r > canvas.clientHeight + 10) {
-          f.y = -f.r - Math.random()*50;
+        if (f.y - f.r > canvas.clientHeight + 8) {
+          f.y = -f.r - Math.random()*40;
           f.x0 = Math.random()*canvas.clientWidth;
           f.theta = Math.random()*Math.PI*2;
         }
-        const s = f.sprite;
-        const size = f.r * 2;
-        ctxTarget.drawImage(s, x - f.r, f.y - f.r, size, size);
+        const s = f.sprite, size = f.r * 2;
+        targetCtx.drawImage(s, x - f.r, f.y - f.r, size, size);
       }
     }
 
-    function renderFrame(targetCtx) {
+    function drawTitle(targetCtx){
+      const w = canvas.clientWidth;
+      targetCtx.save();
+      targetCtx.font = '600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
+      targetCtx.textAlign = 'center';
+      targetCtx.textBaseline = 'top';
+      targetCtx.fillStyle = 'rgba(255,255,255,0.92)';
+      targetCtx.shadowColor = 'rgba(0,0,0,0.45)';
+      targetCtx.shadowBlur = 6;
+      targetCtx.fillText('christmas-spb.ru', w/2, 10);
+      targetCtx.restore();
+    }
+
+    function renderFrame(targetCtx){
       // видео
       try { targetCtx.drawImage(video, 0, 0, canvas.clientWidth, canvas.clientHeight); } catch(e) {}
-      // лёгкая "морозная" вуаль
-      targetCtx.fillStyle = 'rgba(255,255,255,0.03)';
+      // лёгкая вуаль — ещё тоньше
+      targetCtx.fillStyle = 'rgba(255,255,255,0.015)';
       targetCtx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
       // снег
       drawSnow(targetCtx);
       // титул
-      drawTitle();
-      // снеговик (дорисуем поверх с учётом текущего DOM-позиционирования)
+      drawTitle(targetCtx);
+      // снеговик — поверх
       const rC = canvas.getBoundingClientRect();
       const rM = mascot.getBoundingClientRect();
-      const scale = canvas.width / rC.width; // учёт DPR
+      const scale = canvas.width / rC.width;
       const mx = (rM.left - rC.left) * scale;
       const my = (rM.top  - rC.top ) * scale;
       const mw = rM.width * scale;
       const mh = rM.height * scale;
       if (mascotImg.complete) {
-        try { targetCtx.drawImage(mascotImg, mx, my, mw, mh); } catch(e) {}
+        try { targetCtx.drawImage(mascotImg, mx, my, mw, mh); } catch(e){}
       }
     }
 
-    function draw() {
+    function draw(){
       if (!running) return;
       ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
       renderFrame(ctx);
       requestAnimationFrame(draw);
     }
 
-    async function start() {
-      try {
-        // ждём загрузки шрифта, чтобы надпись была красивой с первого кадра
-        try { await document.fonts.ready; } catch(e) {}
-        titleFontReady = true;
-
-        // камера
+    async function start(){
+      try{
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
+          video: { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } },
+          audio:false
         });
         video.srcObject = stream;
         await video.play();
@@ -217,114 +181,79 @@
         running = true;
         startBtn.remove();
         shotBtn.style.display = 'block';
-        mascot.style.display = 'block';
+        mascot.style.display  = 'block';
 
         requestAnimationFrame(draw);
-      } catch (e) {
+      } catch(e){
         alert('Не удалось открыть камеру: ' + e.message);
       }
     }
     startBtn.addEventListener('click', start);
 
-    /* ---------- Снимок кадра (PNG) ---------- */
-    shotBtn.addEventListener('click', () => {
-      // отдельный canvas для снимка в реальных пикселях
+    // ---- Снимок кадра ----
+    shotBtn.addEventListener('click', ()=>{
       const shot = document.createElement('canvas');
-      shot.width  = canvas.width;
-      shot.height = canvas.height;
+      shot.width = canvas.width; shot.height = canvas.height;
       const sctx = shot.getContext('2d');
-      // отрисовываем текущую сцену
       renderFrame(sctx);
-
-      // сохраняем как файл
       const url = shot.toDataURL('image/png');
       const a = document.createElement('a');
-      const ts = new Date();
-      const pad = n => String(n).padStart(2,'0');
-      const fname = `christmas-spb_${ts.getFullYear()}-${pad(ts.getMonth()+1)}-${pad(ts.getDate())}_${pad(ts.getHours())}-${pad(ts.getMinutes())}-${pad(ts.getSeconds())}.png`;
-      a.href = url; a.download = fname;
-      // На iOS лучше открыть в новой вкладке, пользователь сохранит из Шара
-      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
-        window.open(url, '_blank');
-      } else {
-        a.click();
-      }
+      const ts = new Date(), p=n=>String(n).padStart(2,'0');
+      a.download = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
+      a.href = url;
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) window.open(url,'_blank'); else a.click();
     });
 
-    /* ========= ДВИЖЕНИЕ И МАСШТАБ СНЕГОВИКА (Pointer Events) ========= */
+    // ---- Перетаскивание/масштаб ----
     const pointers = new Map();
-    let dragId = null, dragStartX = 0, dragStartY = 0;
-    let startTx = 0, startTy = 0, startScale = 1, startDist = 0;
+    let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
 
-    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-    function getTransform() {
+    function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+    function getTransform(){
       const st = getComputedStyle(mascot);
       return {
-        tx: parseFloat(st.getPropertyValue('--tx')) || 0,
-        ty: parseFloat(st.getPropertyValue('--ty')) || 0,
-        s:  parseFloat(st.getPropertyValue('--s'))  || 1
+        tx: parseFloat(st.getPropertyValue('--tx'))||0,
+        ty: parseFloat(st.getPropertyValue('--ty'))||0,
+        s:  parseFloat(st.getPropertyValue('--s')) ||1
       };
     }
-    function setTransform(tx, ty, s) {
-      mascot.style.setProperty('--tx', tx + 'px');
-      mascot.style.setProperty('--ty', ty + 'px');
+    function setTransform(tx,ty,s){
+      mascot.style.setProperty('--tx', tx+'px');
+      mascot.style.setProperty('--ty', ty+'px');
       mascot.style.setProperty('--s',  s);
     }
 
-    mascot.addEventListener('pointerdown', (e) => {
+    mascot.addEventListener('pointerdown', (e)=>{
       e.preventDefault();
       mascot.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
       const n = pointers.size;
-      const {tx, ty, s} = getTransform();
-
-      if (n === 1) {
-        dragId = e.pointerId;
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-        startTx = tx; startTy = ty;
-        mascot.classList.add('dragging');
-      } else if (n === 2) {
-        startScale = s;
-        const [p1, p2] = Array.from(pointers.values());
-        startDist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
-        mascot.classList.remove('dragging');
-        dragId = null;
+      const {tx,ty,s} = getTransform();
+      if(n===1){
+        dragId=e.pointerId; dragStartX=e.clientX; dragStartY=e.clientY; startTx=tx; startTy=ty; mascot.classList.add('dragging');
+      }else if(n===2){
+        startScale=s; const [p1,p2]=Array.from(pointers.values()); startDist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1; mascot.classList.remove('dragging'); dragId=null;
       }
-    }, {passive:false});
+    },{passive:false});
 
-    mascot.addEventListener('pointermove', (e) => {
-      if (!pointers.has(e.pointerId)) return;
+    mascot.addEventListener('pointermove', (e)=>{
+      if(!pointers.has(e.pointerId)) return;
       e.preventDefault();
-      pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
-
-      const n = pointers.size;
-      const {tx, ty, s} = getTransform();
-
-      if (n === 1 && dragId !== null) {
-        const cur = pointers.get(dragId);
-        const dx = cur.x - dragStartX;
-        const dy = cur.y - dragStartY;
-        setTransform(startTx + dx, startTy + dy, s);
-      } else if (n === 2) {
-        const [p1, p2] = Array.from(pointers.values());
-        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
-        const scale = clamp(startScale * (dist / startDist), 0.3, 3);
-        setTransform(tx, ty, scale);
+      pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      const n = pointers.size; const {tx,ty,s}=getTransform();
+      if(n===1 && dragId!==null){
+        const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-dragStartY; setTransform(startTx+dx,startTy+dy,s);
+      }else if(n===2){
+        const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1; const scale=clamp(startScale*(dist/startDist),0.3,3); setTransform(tx,ty,scale);
       }
-    }, {passive:false});
+    },{passive:false});
 
-    function endPointer(e) {
-      if (pointers.has(e.pointerId)) pointers.delete(e.pointerId);
-      if (e.pointerId === dragId) {
-        dragId = null; mascot.classList.remove('dragging');
-      }
-      if (pointers.size === 1) {
-        const id = Array.from(pointers.keys())[0];
-        const pt = pointers.get(id);
-        const {tx, ty} = getTransform();
-        dragId = id; dragStartX = pt.x; dragStartY = pt.y;
-        startTx = tx; startTy = ty; mascot.classList.add('dragging');
+    function endPointer(e){
+      if(pointers.has(e.pointerId)) pointers.delete(e.pointerId);
+      if(e.pointerId===dragId){ dragId=null; mascot.classList.remove('dragging'); }
+      if(pointers.size===1){
+        const id=Array.from(pointers.keys())[0], pt=pointers.get(id), {tx,ty}=getTransform();
+        dragId=id; dragStartX=pt.x; dragStartY=pt.y; startTx=tx; startTy=ty; mascot.classList.add('dragging');
       }
     }
     mascot.addEventListener('pointerup', endPointer, {passive:false});
