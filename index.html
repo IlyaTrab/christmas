@@ -15,13 +15,36 @@
             font-size:1.1rem;border-radius:.75rem;border:0;background:#fff;}
     #hint {position:fixed;top:1rem;left:1rem;color:#fff;font:14px system-ui, sans-serif;
            text-shadow:0 1px 2px #000;opacity:.8}
+
+    /* GIF-снеговик поверх камеры */
+    #mascot {
+      position: absolute;
+      left: 1rem;
+      bottom: 5.5rem;          /* не перекрывать кнопку "Старт" */
+      width: 28%;
+      max-width: 320px;
+      z-index: 5;              /* выше canvas/video */
+      display: none;           /* покажем после старта */
+    }
+    #mascot img {
+      display: block;
+      width: 100%;
+      height: auto;
+      pointer-events: none;    /* чтобы не перехватывал тапы */
+    }
   </style>
 </head>
 <body>
   <div id="wrap">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
+
+    <!-- Снеговик (GIF). Убедись, что файл лежит по пути assets/snowman.gif -->
+    <div id="mascot">
+      <img src="assets/snowman.gif" alt="Снеговик" draggable="false">
+    </div>
   </div>
+
   <button id="start">Запустить камеру</button>
   <div id="hint">Подай доступ к камере — и пойдёт снег ❄️</div>
 
@@ -29,6 +52,7 @@
     const startBtn = document.getElementById('start');
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
+    const mascot = document.getElementById('mascot');
     const ctx = canvas.getContext('2d', { alpha: true });
     let flakes = [], running = false;
 
@@ -86,6 +110,10 @@
         await video.play();
         resize(); initSnow();
         running = true; startBtn.remove();
+
+        // Показать GIF-снеговика после старта камеры
+        mascot.style.display = 'block';
+
         requestAnimationFrame(draw);
       } catch (e) {
         alert('Не удалось открыть камеру: ' + e.message);
