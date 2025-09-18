@@ -12,7 +12,7 @@
     #wrap {position:fixed;inset:0;}
     video,canvas {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 
-    /* Небольшая кнопка-снимок */
+    /* маленькая кнопка-снимок */
     #shotBtn{
       position:fixed; width:56px; height:56px; border-radius:50%;
       bottom:.9rem; right:.9rem; z-index:7;
@@ -22,7 +22,7 @@
       display:none;
     }
 
-    /* Лаконичный бренд сверху (только в live) */
+    /* бренд сверху (только в live-слое) */
     #brand{
       position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
       font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -31,14 +31,14 @@
       z-index:6; user-select:none; pointer-events:none;
     }
 
-    /* Кнопка запуска камеры */
+    /* запуск камеры */
     #start{
       position:fixed; left:1rem; right:1rem; bottom:1.2rem; z-index:7;
       padding:.9rem 1.1rem; font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       border-radius:.75rem; border:0; background:#fff;
     }
 
-    /* Снеговик (перетаскивание + pinch) */
+    /* снеговик (перетаскивание + pinch) */
     #mascot{
       position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
       width:24%; max-width:280px;
@@ -56,7 +56,7 @@
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
-    <!-- Снеговик как DOM-слой (в live, не рисуем его на canvas) -->
+    <!-- снеговик как DOM-слой -->
     <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
@@ -73,9 +73,14 @@
     const mascot    = document.getElementById('mascot');
     const mascotImg = document.getElementById('mascotImg');
 
+    // ---- Вывод в live: работаем в CSS-пикселях, но рендерим в HiDPI
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    // ---- Снимок: масштаб (1 = как экран, 2 = вдвое чётче; можно 3, но файлы растут)
+    const CAPTURE_DPR = DPR; // при желании поставь 1, 1.5, 2, 3
+
     let running=false, flakes=[], sprites=[];
 
-    /* ----- компактные снежинки ----- */
+    /* ---- снежинки (компактные) ---- */
     function makeFlakeSprite(size){
       const s = Math.max(10, size|0);
       const off = document.createElement('canvas');
@@ -92,10 +97,10 @@
     function buildSprites(){ sprites=[ makeFlakeSprite(16), makeFlakeSprite(14), makeFlakeSprite(12) ]; }
 
     function resize(){
-      const dpr = Math.min(window.devicePixelRatio||1, 2);
-      canvas.width  = Math.floor(canvas.clientWidth  * dpr);
-      canvas.height = Math.floor(canvas.clientHeight * dpr);
-      ctx.setTransform(dpr,0,0,dpr,0,0);
+      // делаем холст HiDPI, но координаты — в CSS-пикселях
+      canvas.width  = Math.floor(canvas.clientWidth  * DPR);
+      canvas.height = Math.floor(canvas.clientHeight * DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
     }
     window.addEventListener('resize', resize);
 
@@ -129,32 +134,33 @@
       }
     }
 
-    /* ---- Рендер кадра (live/shot) ---- */
+    /* ---- общий рендер кадра (ожидает, что targetCtx уже в CSS-координатах) ---- */
     function renderFrame(targetCtx, {includeMascot=false, includeBrand=false}={}){
-      try { targetCtx.drawImage(video, 0, 0, canvas.clientWidth, canvas.clientHeight); } catch(e){}
+      const W = canvas.clientWidth, H = canvas.clientHeight;
+
+      try { targetCtx.drawImage(video, 0, 0, W, H); } catch(e){}
       targetCtx.fillStyle='rgba(255,255,255,0.015)';
-      targetCtx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
+      targetCtx.fillRect(0,0,W,H);
       drawSnow(targetCtx);
 
       if(includeBrand){
-        const w = canvas.clientWidth;
         targetCtx.save();
         targetCtx.font='600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif';
         targetCtx.textAlign='center'; targetCtx.textBaseline='top';
         targetCtx.fillStyle='rgba(255,255,255,0.92)';
         targetCtx.shadowColor='rgba(0,0,0,0.45)'; targetCtx.shadowBlur=6;
-        targetCtx.fillText('christmas-spb.ru', w/2, 10);
+        targetCtx.fillText('christmas-spb.ru', W/2, 10);
         targetCtx.restore();
       }
 
       if(includeMascot && mascotImg.complete){
         const rC = canvas.getBoundingClientRect();
         const rM = mascot.getBoundingClientRect();
-        const scale = canvas.width / rC.width;
-        const mx = (rM.left - rC.left) * scale;
-        const my = (rM.top  - rC.top ) * scale;
-        const mw = rM.width * scale;
-        const mh = rM.height * scale;
+        // координаты в CSS-пикселях — без дополнительного пересчёта!
+        const mx = (rM.left - rC.left);
+        const my = (rM.top  - rC.top );
+        const mw = rM.width;
+        const mh = rM.height;
         try { targetCtx.drawImage(mascotImg, mx, my, mw, mh); } catch(e){}
       }
     }
@@ -162,7 +168,7 @@
     function loop(){
       if(!running) return;
       ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
-      renderFrame(ctx, {includeMascot:false, includeBrand:false}); // LIVE: без дублей
+      renderFrame(ctx, {includeMascot:false, includeBrand:false});
       requestAnimationFrame(loop);
     }
 
@@ -189,10 +195,15 @@
 
     /* ---- Снимок: Share Sheet / download / новая вкладка с <img> ---- */
     shotBtn.addEventListener('click', () => {
+      // создаём отдельный холст под снимок нужного размера
       const shot = document.createElement('canvas');
-      shot.width = canvas.width;
-      shot.height = canvas.height;
+      const Wcss = canvas.clientWidth, Hcss = canvas.clientHeight;
+      shot.width  = Math.floor(Wcss * CAPTURE_DPR);
+      shot.height = Math.floor(Hcss * CAPTURE_DPR);
       const sctx = shot.getContext('2d');
+      // работаем в CSS-координатах, как и в live
+      sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
+
       renderFrame(sctx, { includeMascot: true, includeBrand: true });
 
       const save = (blob) => {
@@ -201,30 +212,20 @@
         const fname = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
         const file = new File([blob], fname, { type: 'image/png' });
 
-        // 1) Web Share API (если устройство умеет делиться файлами)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           navigator.share({ files: [file], title: 'christmas-spb.ru' })
-            .catch(() => openInNewTabAsImage(blob)); // если отменили — просто покажем в новой вкладке
+            .catch(() => openInNewTabAsImage(blob));
           return;
         }
-
-        // 2) Android/десктоп — обычное скачивание
         if (!/iphone|ipad|ipod/i.test(navigator.userAgent)) {
           downloadBlob(blob, fname);
           return;
         }
-
-        // 3) iOS без Share API → открыть вкладку и вписать <img src="data:...">
         openInNewTabAsImage(blob);
       };
 
-      if (shot.toBlob) {
-        shot.toBlob(save, 'image/png', 0.92);
-      } else {
-        // очень старые браузеры
-        const url = shot.toDataURL('image/png');
-        openDataURLInNewTab(url);
-      }
+      if (shot.toBlob) shot.toBlob(save, 'image/png', 0.92);
+      else openDataURLInNewTab(shot.toDataURL('image/png'));
     });
 
     function downloadBlob(blob, fname) {
@@ -237,18 +238,13 @@
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
 
-    // Открываем новую вкладку и ВПИСЫВАЕМ туда HTML с <img>, чтобы iOS точно показал фото
     function openInNewTabAsImage(blob) {
       const reader = new FileReader();
       reader.onload = () => {
-        const dataUrl = reader.result; // data:image/png;base64,...
+        const dataUrl = reader.result;
         const w = window.open('', '_blank');
         const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Photo</title>
 <style>
   html,body{height:100%;margin:0;background:#000;}
@@ -257,41 +253,25 @@
   .hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
         color:#fff;font:14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
         opacity:.8;text-shadow:0 1px 2px rgba(0,0,0,.6);}
-</style>
-</head>
+</style></head>
 <body>
   <div class="wrap"><img src="${dataUrl}" alt="photo"></div>
-  <div class="hint">На iPhone: нажмите «Поделиться» → «Сохранить изображение»</div>
-</body>
-</html>`;
-        if (w && w.document) {
-          w.document.open();
-          w.document.write(html);
-          w.document.close();
-        } else {
-          // если попап заблокирован — заменим текущую вкладку
-          const newDoc = window.document;
-          newDoc.open();
-          newDoc.write(html);
-          newDoc.close();
-        }
+  <div class="hint">На iPhone: «Поделиться» → «Сохранить изображение»</div>
+</body></html>`;
+        if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
+        else { document.open(); document.write(html); document.close(); }
       };
       reader.readAsDataURL(blob);
     }
 
     function openDataURLInNewTab(url) {
       const w = window.open('', '_blank');
-      const html = `
-<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Photo</title>
-<style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style>
-</head><body><div class="wrap"><img src="${url}" alt="photo"></div></body></html>`;
+      const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style><div class="wrap"><img src="${url}" alt="photo"></div>`;
       if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
       else { document.write(html); }
     }
 
-    /* ---- Перетаскивание и pinch масштаб ---- */
+    /* ---- перетаскивание и pinch масштаб ---- */
     const pointers = new Map();
     let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
 
