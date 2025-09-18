@@ -189,20 +189,63 @@
     }
     startBtn.addEventListener('click', start);
 
-    /* ---- Снимок ---- */
-    shotBtn.addEventListener('click', ()=>{
+    /* ---- Снимок (Share Sheet / download / вкладка) ---- */
+    shotBtn.addEventListener('click', () => {
+      // 1) Сгенерировать снимок
       const shot = document.createElement('canvas');
-      shot.width = canvas.width; shot.height = canvas.height;
+      shot.width = canvas.width; 
+      shot.height = canvas.height;
       const sctx = shot.getContext('2d');
-      // В снимке добавляем и бренд, и снеговика
-      renderFrame(sctx, {includeMascot:true, includeBrand:true});
-      const url = shot.toDataURL('image/png');
-      const a = document.createElement('a');
-      const ts = new Date(), p=n=>String(n).padStart(2,'0');
-      a.download = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
-      a.href = url;
-      if(/iphone|ipad|ipod/i.test(navigator.userAgent)) window.open(url,'_blank'); else a.click();
+      renderFrame(sctx, { includeMascot: true, includeBrand: true });
+
+      // 2) Превратить в Blob → File и поделиться/сохранить
+      const save = (blob) => {
+        const p = (n)=>String(n).padStart(2,'0');
+        const ts = new Date();
+        const fname = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
+        const file = new File([blob], fname, { type: 'image/png' });
+
+        // Web Share API с файлами (iOS 15+/Android 12+)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: 'christmas-spb.ru' })
+            .catch(() => fallbackOpen(blob)); // если отменили — откроем вкладку
+          return;
+        }
+        // Обычная загрузка (Android/desktop)
+        fallbackDownload(blob, fname);
+      };
+
+      if (shot.toBlob) {
+        shot.toBlob(save, 'image/png', 0.92);
+      } else {
+        // очень старые браузеры
+        const url = shot.toDataURL('image/png');
+        fallbackOpenDataURL(url);
+      }
     });
+
+    function fallbackDownload(blob, fname) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    }
+
+    function fallbackOpen(blob) {
+      // iOS: открыть фото в новой вкладке → «Поделиться» → «Сохранить изображение»
+      const url = URL.createObjectURL(blob);
+      const w = window.open(url, '_blank');
+      if (!w) window.location.href = url;
+      setTimeout(()=>URL.revokeObjectURL(url), 20000);
+    }
+
+    function fallbackOpenDataURL(url) {
+      const w = window.open(url, '_blank');
+      if (!w) window.location.href = url;
+    }
 
     /* ---- Перетаскивание и pinch масштаб ---- */
     const pointers = new Map();
@@ -245,7 +288,7 @@
         const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-dragStartY; setTransform(startTx+dx,startTy+dy,s);
       }else if(n===2){
         const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
-        const scale=clamp(startScale*(dist/startDist), 0.2, 5);  // больше масштаб
+        const scale=clamp(startScale*(dist/startDist), 0.2, 5);
         setTransform(tx,ty,scale);
       }
     },{passive:false});
