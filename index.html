@@ -129,9 +129,7 @@
       }
     }
 
-    /* ---- Рендер кадра.
-       live={includeMascot:false, includeBrand:false} — на экран,
-       shot={includeMascot:true, includeBrand:true} — для фото */
+    /* ---- Рендер кадра (live/shot) ---- */
     function renderFrame(targetCtx, {includeMascot=false, includeBrand=false}={}){
       try { targetCtx.drawImage(video, 0, 0, canvas.clientWidth, canvas.clientHeight); } catch(e){}
       targetCtx.fillStyle='rgba(255,255,255,0.015)';
@@ -189,30 +187,35 @@
     }
     startBtn.addEventListener('click', start);
 
-    /* ---- Снимок (Share Sheet / download / вкладка) ---- */
+    /* ---- Снимок: Share Sheet / download / новая вкладка с <img> ---- */
     shotBtn.addEventListener('click', () => {
-      // 1) Сгенерировать снимок
       const shot = document.createElement('canvas');
-      shot.width = canvas.width; 
+      shot.width = canvas.width;
       shot.height = canvas.height;
       const sctx = shot.getContext('2d');
       renderFrame(sctx, { includeMascot: true, includeBrand: true });
 
-      // 2) Превратить в Blob → File и поделиться/сохранить
       const save = (blob) => {
-        const p = (n)=>String(n).padStart(2,'0');
+        const p = n => String(n).padStart(2,'0');
         const ts = new Date();
         const fname = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
         const file = new File([blob], fname, { type: 'image/png' });
 
-        // Web Share API с файлами (iOS 15+/Android 12+)
+        // 1) Web Share API (если устройство умеет делиться файлами)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           navigator.share({ files: [file], title: 'christmas-spb.ru' })
-            .catch(() => fallbackOpen(blob)); // если отменили — откроем вкладку
+            .catch(() => openInNewTabAsImage(blob)); // если отменили — просто покажем в новой вкладке
           return;
         }
-        // Обычная загрузка (Android/desktop)
-        fallbackDownload(blob, fname);
+
+        // 2) Android/десктоп — обычное скачивание
+        if (!/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+          downloadBlob(blob, fname);
+          return;
+        }
+
+        // 3) iOS без Share API → открыть вкладку и вписать <img src="data:...">
+        openInNewTabAsImage(blob);
       };
 
       if (shot.toBlob) {
@@ -220,31 +223,72 @@
       } else {
         // очень старые браузеры
         const url = shot.toDataURL('image/png');
-        fallbackOpenDataURL(url);
+        openDataURLInNewTab(url);
       }
     });
 
-    function fallbackDownload(blob, fname) {
+    function downloadBlob(blob, fname) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = fname;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 5000);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
 
-    function fallbackOpen(blob) {
-      // iOS: открыть фото в новой вкладке → «Поделиться» → «Сохранить изображение»
-      const url = URL.createObjectURL(blob);
-      const w = window.open(url, '_blank');
-      if (!w) window.location.href = url;
-      setTimeout(()=>URL.revokeObjectURL(url), 20000);
+    // Открываем новую вкладку и ВПИСЫВАЕМ туда HTML с <img>, чтобы iOS точно показал фото
+    function openInNewTabAsImage(blob) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result; // data:image/png;base64,...
+        const w = window.open('', '_blank');
+        const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Photo</title>
+<style>
+  html,body{height:100%;margin:0;background:#000;}
+  .wrap{height:100%;display:flex;align-items:center;justify-content:center;}
+  img{max-width:100vw;max-height:100vh;display:block}
+  .hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
+        color:#fff;font:14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+        opacity:.8;text-shadow:0 1px 2px rgba(0,0,0,.6);}
+</style>
+</head>
+<body>
+  <div class="wrap"><img src="${dataUrl}" alt="photo"></div>
+  <div class="hint">На iPhone: нажмите «Поделиться» → «Сохранить изображение»</div>
+</body>
+</html>`;
+        if (w && w.document) {
+          w.document.open();
+          w.document.write(html);
+          w.document.close();
+        } else {
+          // если попап заблокирован — заменим текущую вкладку
+          const newDoc = window.document;
+          newDoc.open();
+          newDoc.write(html);
+          newDoc.close();
+        }
+      };
+      reader.readAsDataURL(blob);
     }
 
-    function fallbackOpenDataURL(url) {
-      const w = window.open(url, '_blank');
-      if (!w) window.location.href = url;
+    function openDataURLInNewTab(url) {
+      const w = window.open('', '_blank');
+      const html = `
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Photo</title>
+<style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style>
+</head><body><div class="wrap"><img src="${url}" alt="photo"></div></body></html>`;
+      if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
+      else { document.write(html); }
     }
 
     /* ---- Перетаскивание и pinch масштаб ---- */
