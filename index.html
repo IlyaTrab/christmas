@@ -38,10 +38,10 @@
       border-radius:.75rem; border:0; background:#fff;
     }
 
-    /* снеговик (перетаскивание + pinch) */
+    /* снеговик/снегурочка (перетаскивание + pinch) */
     #mascot{
       position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
-      width:24%; max-width:280px;
+      width:24%; max-width:300px;
       touch-action:none; user-select:none; cursor:grab;
       --tx:0px; --ty:0px; --s:1;
       transform:translate(var(--tx),var(--ty)) scale(var(--s));
@@ -56,11 +56,21 @@
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
-    <!-- снеговик как DOM-слой -->
-    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
+    <!-- персонаж как DOM-слой -->
+    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Character" draggable="false"></div>
   </div>
 
   <div id="brand">christmas-spb.ru</div>
+
+  <!-- выбор персонажа -->
+  <div id="chooser" aria-label="Выбор персонажа" style="
+    position:fixed; left:.9rem; bottom:.9rem; z-index:7; display:none;
+    background:rgba(0,0,0,.35); backdrop-filter:blur(6px);
+    border-radius:999px; padding:.25rem;">
+    <button id="chooseSnowman"  title="Снеговик"   style="border:0;background:#fff;border-radius:999px;width:40px;height:40px;margin:.15rem;font-size:18px">⛄</button>
+    <button id="chooseSneg"     title="Снегурочка" style="border:0;background:#fff;border-radius:999px;width:40px;height:40px;margin:.15rem;font-size:18px">❄️</button>
+  </div>
+
   <button id="shotBtn" aria-label="Сделать фото" title="Сделать фото">📷</button>
   <button id="start">Запустить камеру</button>
 
@@ -72,11 +82,12 @@
     const ctx       = canvas.getContext('2d', { alpha:true });
     const mascot    = document.getElementById('mascot');
     const mascotImg = document.getElementById('mascotImg');
+    const chooser   = document.getElementById('chooser');
+    const btnSnow   = document.getElementById('chooseSnowman');
+    const btnSneg   = document.getElementById('chooseSneg');
 
-    // ---- Вывод в live: работаем в CSS-пикселях, но рендерим в HiDPI
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
-    // ---- Снимок: масштаб (1 = как экран, 2 = вдвое чётче; можно 3, но файлы растут)
-    const CAPTURE_DPR = DPR; // при желании поставь 1, 1.5, 2, 3
+    const CAPTURE_DPR = DPR;
 
     let running=false, flakes=[], sprites=[];
 
@@ -97,7 +108,6 @@
     function buildSprites(){ sprites=[ makeFlakeSprite(16), makeFlakeSprite(14), makeFlakeSprite(12) ]; }
 
     function resize(){
-      // делаем холст HiDPI, но координаты — в CSS-пикселях
       canvas.width  = Math.floor(canvas.clientWidth  * DPR);
       canvas.height = Math.floor(canvas.clientHeight * DPR);
       ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -156,7 +166,6 @@
       if(includeMascot && mascotImg.complete){
         const rC = canvas.getBoundingClientRect();
         const rM = mascot.getBoundingClientRect();
-        // координаты в CSS-пикселях — без дополнительного пересчёта!
         const mx = (rM.left - rC.left);
         const my = (rM.top  - rC.top );
         const mw = rM.width;
@@ -185,7 +194,9 @@
         running = true;
         startBtn.remove();
         shotBtn.style.display='block';
+        chooser.style.display='flex';
         mascot.style.display='block';
+        setCharacter('snowman'); // стартовый
         requestAnimationFrame(loop);
       }catch(e){
         alert('Не удалось открыть камеру: '+e.message);
@@ -193,17 +204,32 @@
     }
     startBtn.addEventListener('click', start);
 
+    /* ---- выбор персонажа ---- */
+    function setCharacter(name){
+      // меняем источник, чуть нормализуем стартовую ширину
+      if(name === 'snegurochka'){
+        mascotImg.src = 'assets/snegurochka.gif';
+        mascot.style.width = '28%';
+      }else{
+        mascotImg.src = 'assets/snowman.gif';
+        mascot.style.width = '24%';
+      }
+      // если хочешь сброс позиции/масштаба при смене — раскомментируй:
+      // mascot.style.setProperty('--tx','0px');
+      // mascot.style.setProperty('--ty','0px');
+      // mascot.style.setProperty('--s','1');
+    }
+    btnSnow.addEventListener('click', ()=>setCharacter('snowman'));
+    btnSneg.addEventListener('click', ()=>setCharacter('snegurochka'));
+
     /* ---- Снимок: Share Sheet / download / новая вкладка с <img> ---- */
     shotBtn.addEventListener('click', () => {
-      // создаём отдельный холст под снимок нужного размера
       const shot = document.createElement('canvas');
       const Wcss = canvas.clientWidth, Hcss = canvas.clientHeight;
       shot.width  = Math.floor(Wcss * CAPTURE_DPR);
       shot.height = Math.floor(Hcss * CAPTURE_DPR);
       const sctx = shot.getContext('2d');
-      // работаем в CSS-координатах, как и в live
       sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
-
       renderFrame(sctx, { includeMascot: true, includeBrand: true });
 
       const save = (blob) => {
