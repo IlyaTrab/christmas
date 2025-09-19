@@ -1,508 +1,242 @@
 <!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Snow Cam</title>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Snow Cam">
-  <meta name="theme-color" content="#000000">
-  <style>
-    :root{
-      --fab-size:56px;
-      --fab-gap:.6rem;
-      --glass-bg:rgba(255,255,255,.12);
-      --glass-brd:rgba(255,255,255,.28);
-      --glass-on:rgba(255,255,255,.22);
-    }
-    html,body {margin:0;height:100%;background:#000;overflow:hidden;}
-    #wrap {position:fixed;inset:0;}
-    video,canvas {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-    *{-webkit-tap-highlight-color: transparent;}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Snow Cam</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Snow Cam">
+<meta name="theme-color" content="#000000">
+<style>
+  :root{--fab-size:56px;--fab-gap:.6rem;--glass-bg:rgba(255,255,255,.12);--glass-brd:rgba(255,255,255,.28);--glass-on:rgba(255,255,255,.22);}
+  html,body{margin:0;height:100%;background:#000;overflow:hidden;}
+  #wrap{position:fixed;inset:0;}
+  video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  *{-webkit-tap-highlight-color:transparent;}
 
-    /* бренд (скрыт до старта) */
-    #brand{
-      position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
-      font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:#fff; letter-spacing:.5px; opacity:.9;
-      text-shadow:0 1px 2px rgba(0,0,0,.6);
-      z-index:6; user-select:none; pointer-events:none;
-      display:none; /* покажем после старта */
-    }
+  /* скрыто до старта */
+  #brand{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#fff;letter-spacing:.5px;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.6);z-index:6;user-select:none;pointer-events:none;display:none;}
+  #controls{position:fixed;bottom:.9rem;z-index:7;left:50%;transform:translateX(-50%);gap:var(--fab-gap);display:none;}
+  #mascot{position:absolute;left:1rem;bottom:4.8rem;z-index:5;display:none;width:24%;max-width:300px;touch-action:none;user-select:none;cursor:grab;--tx:0px;--ty:0px;--s:1;transform:translate(var(--tx),var(--ty)) scale(var(--s));transform-origin:center center;}
+  #mascot.dragging{cursor:grabbing;}
+  #mascot img{display:block;width:100%;height:auto;pointer-events:none;}
 
-    /* вспышка камеры */
-    #flash{
-      position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:8;
-      transition:opacity .45s ease;
-    }
-    #flash.go{ opacity:.9; }
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;transition:opacity .45s ease;}
+  #flash.go{opacity:.9;}
 
-    /* запуск камеры (единственное, что видно изначально) */
-    #start{
-      position:fixed; left:1rem; right:1rem; bottom:1.2rem; z-index:7;
-      padding:.9rem 1.1rem; font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      border-radius:.75rem; border:0; background:#fff; cursor:pointer;
-    }
+  #start{position:fixed;left:1rem;right:1rem;bottom:1.2rem;z-index:7;padding:.9rem 1.1rem;font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;border-radius:.75rem;border:0;background:#fff;cursor:pointer;}
 
-    /* персонаж (перетаскивание + pinch) */
-    #mascot{
-      position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
-      width:24%; max-width:300px;
-      touch-action:none; user-select:none; cursor:grab;
-      --tx:0px; --ty:0px; --s:1;
-      transform:translate(var(--tx),var(--ty)) scale(var(--s));
-      transform-origin:center center;
-    }
-    #mascot.dragging{cursor:grabbing;}
-    #mascot img{display:block; width:100%; height:auto; pointer-events:none;}
-
-    /* панель кнопок (стекло) — по центру, скрыта до старта */
-    #controls{
-      position:fixed; bottom:.9rem; z-index:7; display:none;
-      display:flex; gap:var(--fab-gap);
-      left:50%; transform:translateX(-50%);
-    }
-
-    .fab{
-      position:relative;
-      width:var(--fab-size); height:var(--fab-size); border-radius:999px;
-      display:inline-flex; align-items:center; justify-content:center;
-      background:var(--glass-bg);
-      border:1px solid var(--glass-brd);
-      backdrop-filter: blur(10px);
-      color:rgba(255,255,255,.78);
-      box-shadow:0 6px 18px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
-      outline:none; cursor:pointer;
-      transition:transform .12s ease, background .15s ease, color .15s ease, box-shadow .15s ease, filter .15s ease;
-    }
-    .fab svg{ width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:2; vector-effect:non-scaling-stroke; stroke-linecap:round; stroke-linejoin:round;}
-    .fab:active{ transform:scale(.96); }
-    .fab.is-on{
-      background:var(--glass-on);
-      color:#fff;
-      box-shadow:0 8px 22px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.12) inset;
-    }
-    .fab:hover{ filter:brightness(1.08); }
-    .fab:focus-visible{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
-
-    /* акцент для камеры */
-    #shotBtn{
-      border:1px solid rgba(255,255,255,.35);
-      color:#fff;
-      background: linear-gradient(to bottom, rgba(255,255,255,.18), rgba(255,255,255,.10));
-    }
-  </style>
+  .fab{position:relative;width:var(--fab-size);height:var(--fab-size);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:var(--glass-bg);border:1px solid var(--glass-brd);backdrop-filter:blur(10px);color:rgba(255,255,255,.78);box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.06);outline:none;cursor:pointer;transition:transform .12s ease,background .15s ease,color .15s ease,box-shadow .15s ease,filter .15s ease;}
+  .fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;}
+  .fab:active{transform:scale(.96);}
+  .fab.is-on{background:var(--glass-on);color:#fff;box-shadow:0 8px 22px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.12) inset;}
+  .fab:hover{filter:brightness(1.08);}
+  .fab:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px;}
+  #shotBtn{border:1px solid rgba(255,255,255,.35);color:#fff;background:linear-gradient(to bottom,rgba(255,255,255,.18),rgba(255,255,255,.10));}
+</style>
 </head>
 <body>
   <div id="wrap">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
-
-    <!-- персонаж как DOM-слой -->
     <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
-  <!-- вспышка -->
   <div id="flash"></div>
-
-  <!-- бренд (только на экране, покажем после старта) -->
   <div id="brand">christmas-spb.ru</div>
 
-  <!-- стеклянная панель управления (по центру) -->
   <div id="controls" aria-label="Управление">
-    <!-- ❄️ Снег -->
-    <button id="btnSnow" class="fab is-on" type="button" aria-label="Снег вкл/выкл" aria-pressed="true" title="Снег">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2v20M12 12L21 7M12 12L3 7M12 12l9 5M12 12L3 17M2 12h20M7 4l3 1.8M17 4l-3 1.8M7 20l3-1.8M17 20l-3-1.8"/>
-      </svg>
+    <button id="btnSnow" class="fab is-on" type="button" aria-pressed="true" title="Снег">
+      <svg viewBox="0 0 24 24"><path d="M12 2v20M12 12L21 7M12 12L3 7M12 12l9 5M12 12L3 17M2 12h20M7 4l3 1.8M17 4l-3 1.8M7 20l3-1.8M17 20l-3-1.8"/></svg>
     </button>
-
-    <!-- ⛄ Снеговик -->
-    <button id="btnMascot" class="fab is-on" type="button" aria-label="Снеговик вкл/выкл" aria-pressed="true" title="Снеговик">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <g transform="translate(0.5 0.5)">
-          <circle cx="12" cy="15.5" r="5"/>
-          <circle cx="12" cy="8" r="3.2"/>
-          <path d="M6.2 12.5L4 11M17.8 12.5L20 11"/>
-          <path d="M9.4 6.6h5.2M9 6l6-.6"/>
-        </g>
-      </svg>
+    <button id="btnMascot" class="fab is-on" type="button" aria-pressed="true" title="Снеговик">
+      <svg viewBox="0 0 24 24"><g transform="translate(0.5 0.5)"><circle cx="12" cy="15.5" r="5"/><circle cx="12" cy="8" r="3.2"/><path d="M6.2 12.5L4 11M17.8 12.5L20 11"/><path d="M9.4 6.6h5.2M9 6l6-.6"/></g></svg>
     </button>
-
-    <!-- 🎵 Музыка -->
-    <button id="btnMusic" class="fab is-on" type="button" aria-label="Музыка вкл/выкл" aria-pressed="true" title="Музыка">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-        <path d="M9 12V5l10-2v7"/>
-      </svg>
+    <button id="btnMusic" class="fab is-on" type="button" aria-pressed="true" title="Музыка">
+      <svg viewBox="0 0 24 24"><path d="M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M9 12V5l10-2v7"/></svg>
     </button>
-
-    <!-- 📷 Фото -->
-    <button id="shotBtn" class="fab" type="button" aria-label="Сделать фото" title="Сделать фото">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>
-        <circle cx="12" cy="14" r="3.2"/>
-      </svg>
+    <button id="shotBtn" class="fab" type="button" title="Сделать фото">
+      <svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="14" r="3.2"/></svg>
     </button>
   </div>
 
-  <!-- единственный элемент, видимый до старта -->
+  <!-- единственное, что видно до старта -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
-  <script>
-    'use strict';
+<script>
+'use strict';
+const startBtn=document.getElementById('start');
+const shotBtn =document.getElementById('shotBtn');
+const btnSnow =document.getElementById('btnSnow');
+const btnMascot=document.getElementById('btnMascot');
+const btnMusic=document.getElementById('btnMusic');
+const controls=document.getElementById('controls');
+const flash   =document.getElementById('flash');
+const brand   =document.getElementById('brand');
 
-    // --- ссылки на DOM ---
-    const startBtn  = document.getElementById('start');
-    const shotBtn   = document.getElementById('shotBtn');
-    const btnSnow   = document.getElementById('btnSnow');
-    const btnMascot = document.getElementById('btnMascot');
-    const btnMusic  = document.getElementById('btnMusic');
-    const controls  = document.getElementById('controls');
-    const flash     = document.getElementById('flash');
-    const brand     = document.getElementById('brand');
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d',{alpha:true});
+const mascot=document.getElementById('mascot');
+const mascotImg=document.getElementById('mascotImg');
 
-    const video     = document.getElementById('video');
-    const canvas    = document.getElementById('canvas');
-    const ctx       = canvas.getContext('2d', { alpha:true });
-    const mascot    = document.getElementById('mascot');
-    const mascotImg = document.getElementById('mascotImg');
+const DPR=Math.min(window.devicePixelRatio||1,2);
+const CAPTURE_DPR=DPR;
 
-    // --- рендер ---
-    const DPR = Math.min(window.devicePixelRatio || 1, 2);
-    const CAPTURE_DPR = DPR;
+let running=false, flakes=[], sprites=[],
+    snowEnabled=true, mascotEnabled=true, musicEnabled=true;
 
-    // --- состояние ---
-    let running=false, flakes=[], sprites=[],
-        snowEnabled=true, mascotEnabled=true, musicEnabled=true;
+/* ==== музыка ==== */
+let bgm=null, audioCtx=null, gain=null;
+function initAudio(){
+  if(bgm) return;
+  bgm=new Audio(); bgm.loop=true; bgm.preload='auto'; bgm.src='assets/song.mp3';
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(AC){ audioCtx=new AC(); const src=audioCtx.createMediaElementSource(bgm); gain=audioCtx.createGain(); gain.gain.value=0.0; src.connect(gain).connect(audioCtx.destination); }
+  else bgm.volume=0.0;
+}
+async function startMusic(){
+  try{ initAudio(); if(audioCtx&&audioCtx.state==='suspended') await audioCtx.resume(); await bgm.play(); fadeTo(0.6,0.5);}
+  catch(e){ musicEnabled=false; updateTogglesUI(); }
+}
+function stopMusic(){ fadeTo(0.0,0.4); setTimeout(()=>{try{bgm.pause();}catch(_){}} ,420); }
+function fadeTo(target, dur){
+  if(gain&&audioCtx){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(target, now+dur);}
+  else if(bgm){ const from=bgm.volume, steps=Math.max(1,Math.floor(dur*30)); let i=0; const t=setInterval(()=>{ i++; bgm.volume=from+(target-from)*i/steps; if(i>=steps) clearInterval(t); },33);}
+}
 
-    // ===== аудио (фон) =====
-    let bgm=null, audioCtx=null, gain=null, musicReady=false;
+/* ==== снег ==== */
+function makeFlakeSprite(size){
+  const s=Math.max(10,size|0); const off=document.createElement('canvas'); off.width=off.height=s;
+  const c=off.getContext('2d'); const g=c.createRadialGradient(s/2,s/2,s*0.05,s/2,s/2,s*0.42);
+  g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(.6,'rgba(255,255,255,.35)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  c.fillStyle=g; c.beginPath(); c.arc(s/2,s/2,s*0.42,0,Math.PI*2); c.fill(); return off;
+}
+function buildSprites(){ sprites=[makeFlakeSprite(16),makeFlakeSprite(14),makeFlakeSprite(12)]; }
+function resize(){ canvas.width=Math.floor(canvas.clientWidth*DPR); canvas.height=Math.floor(canvas.clientHeight*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
+window.addEventListener('resize',resize);
+function initSnow(){
+  const area=canvas.clientWidth*canvas.clientHeight; const n=Math.max(70,Math.floor(area/26000));
+  flakes=new Array(n).fill(0).map(()=>({x0:Math.random()*canvas.clientWidth,y:Math.random()*canvas.clientHeight,r:6+Math.random()*6,vy:0.7+Math.random()*1.0,swayAmp:6+Math.random()*10,theta:Math.random()*Math.PI*2,swaySpeed:0.012+Math.random()*0.018,sprite:sprites[(Math.random()*sprites.length)|0]}));
+}
+function drawSnow(targetCtx){
+  if(!snowEnabled) return;
+  for(const f of flakes){
+    f.theta+=f.swaySpeed; const x=f.x0+Math.sin(f.theta)*f.swayAmp; f.y+=f.vy;
+    if(f.y-f.r>canvas.clientHeight+8){ f.y=-f.r-Math.random()*40; f.x0=Math.random()*canvas.clientWidth; f.theta=Math.random()*Math.PI*2; }
+    const s=f.sprite, size=f.r*2; targetCtx.drawImage(s,x-f.r,f.y-f.r,size,size);
+  }
+}
 
-    function initAudio(){
-      if (bgm) return;
-      bgm = new Audio();
-      bgm.loop = true;
-      bgm.preload = 'auto';
-      bgm.src = 'assets/song.mp3'; // добавь этот файл в репозиторий
+/* ==== рендер ==== */
+function renderFrame(targetCtx,{includeMascot=false}={}){
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  try{ targetCtx.drawImage(video,0,0,W,H);}catch(_){}
+  targetCtx.fillStyle='rgba(255,255,255,.015)'; targetCtx.fillRect(0,0,W,H);
+  drawSnow(targetCtx);
+  if(includeMascot && mascotEnabled && mascotImg.complete){
+    const rC=canvas.getBoundingClientRect(), rM=mascot.getBoundingClientRect();
+    const mx=(rM.left-rC.left), my=(rM.top-rC.top), mw=rM.width, mh=rM.height;
+    try{ targetCtx.drawImage(mascotImg,mx,my,mw,mh);}catch(_){}
+  }
+}
+function loop(){ if(!running) return; ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); renderFrame(ctx,{includeMascot:false}); requestAnimationFrame(loop); }
 
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) {
-        audioCtx = new AC();
-        const src = audioCtx.createMediaElementSource(bgm);
-        gain = audioCtx.createGain();
-        gain.gain.value = 0.0;
-        src.connect(gain).connect(audioCtx.destination);
-      } else {
-        bgm.volume = 0.0;
-      }
-      musicReady = true;
+/* ==== старт камеры (мягкий retry для AbortError) ==== */
+async function start(){
+  try{
+    let stream;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+    }catch(e){
+      if(e&& (e.name==='AbortError'||/aborted/i.test(e.message||''))){ await new Promise(r=>setTimeout(r,300)); stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); }
+      else throw e;
     }
+    video.srcObject=stream; try{ await video.play(); }catch(_){ await new Promise(r=>setTimeout(r,120)); await video.play(); }
 
-    async function startMusic(){
-      try{
-        initAudio();
-        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
-        await bgm.play();
-        fadeTo(0.6, 0.5);
-      }catch(e){
-        musicEnabled = false;
-        updateTogglesUI();
-        console.log('BGM play blocked:', e);
-      }
-    }
-    function stopMusic(){ fadeTo(0.0, 0.4); setTimeout(()=>{ try{ bgm.pause(); }catch(_){} }, 420); }
-    function fadeTo(target=0.6, dur=0.4){
-      if (gain && audioCtx) {
-        const now = audioCtx.currentTime;
-        gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(gain.gain.value, now);
-        gain.gain.linearRampToValueAtTime(target, now + dur);
-      } else if (bgm) {
-        const from = bgm.volume, steps = Math.max(1, Math.floor(dur*30));
-        let i=0; const t=setInterval(()=>{ i++; bgm.volume = from + (target-from)*i/steps; if(i>=steps) clearInterval(t); }, 1000/30);
-      }
-    }
+    resize(); buildSprites(); initSnow(); running=true;
 
-    /* ===== снежинки ===== */
-    function makeFlakeSprite(size){
-      const s = Math.max(10, size|0);
-      const off = document.createElement('canvas');
-      off.width = off.height = s;
-      const c = off.getContext('2d');
-      const g = c.createRadialGradient(s/2, s/2, s*0.05, s/2, s/2, s*0.42);
-      g.addColorStop(0.0, 'rgba(255,255,255,0.95)');
-      g.addColorStop(0.6, 'rgba(255,255,255,0.35)');
-      g.addColorStop(1.0, 'rgba(255,255,255,0.00)');
-      c.fillStyle = g;
-      c.beginPath(); c.arc(s/2, s/2, s*0.42, 0, Math.PI*2); c.fill();
-      return off;
-    }
-    function buildSprites(){ sprites=[ makeFlakeSprite(16), makeFlakeSprite(14), makeFlakeSprite(12) ]; }
+    // ПОКАЗЫВАЕМ всё только сейчас
+    brand.style.display='block';
+    controls.style.display='flex';
+    mascot.style.display= mascotEnabled ? 'block':'none';
 
-    function resize(){
-      canvas.width  = Math.floor(canvas.clientWidth  * DPR);
-      canvas.height = Math.floor(canvas.clientHeight * DPR);
-      ctx.setTransform(DPR,0,0,DPR,0,0);
-    }
-    window.addEventListener('resize', resize);
+    if(startBtn) startBtn.remove();
+    requestAnimationFrame(loop);
 
-    function initSnow(){
-      const area = canvas.clientWidth * canvas.clientHeight;
-      const n = Math.max(70, Math.floor(area/26000));
-      flakes = new Array(n).fill(0).map(()=>({
-        x0: Math.random()*canvas.clientWidth,
-        y:  Math.random()*canvas.clientHeight,
-        r:  6 + Math.random()*6,
-        vy: 0.7 + Math.random()*1.0,
-        swayAmp: 6 + Math.random()*10,
-        theta: Math.random()*Math.PI*2,
-        swaySpeed: 0.012 + Math.random()*0.018,
-        sprite: sprites[(Math.random()*sprites.length)|0]
-      }));
-    }
+    if(musicEnabled) startMusic();
+  }catch(e){ alert('Не удалось открыть камеру: '+e.message); }
+}
+startBtn.addEventListener('click',start);
 
-    function drawSnow(targetCtx){
-      if(!snowEnabled) return;
-      for(const f of flakes){
-        f.theta += f.swaySpeed;
-        const x = f.x0 + Math.sin(f.theta)*f.swayAmp;
-        f.y += f.vy;
-        if(f.y - f.r > canvas.clientHeight + 8){
-          f.y = -f.r - Math.random()*40;
-          f.x0 = Math.random()*canvas.clientWidth;
-          f.theta = Math.random()*Math.PI*2;
-        }
-        const s = f.sprite, size = f.r*2;
-        targetCtx.drawImage(s, x - f.r, f.y - f.r, size, size);
-      }
-    }
+/* ==== тумблеры ==== */
+function updateTogglesUI(){
+  btnSnow.classList.toggle('is-on',snowEnabled);  btnSnow.setAttribute('aria-pressed',String(snowEnabled));
+  btnMascot.classList.toggle('is-on',mascotEnabled); btnMascot.setAttribute('aria-pressed',String(mascotEnabled));
+  btnMusic.classList.toggle('is-on',musicEnabled); btnMusic.setAttribute('aria-pressed',String(musicEnabled));
+  mascot.style.display = running && mascotEnabled ? 'block' : 'none';
+  if(navigator.vibrate) navigator.vibrate(8);
+}
+btnSnow.addEventListener('click',()=>{ snowEnabled=!snowEnabled; updateTogglesUI(); });
+btnMascot.addEventListener('click',()=>{ mascotEnabled=!mascotEnabled; updateTogglesUI(); });
+btnMusic.addEventListener('click',async()=>{ musicEnabled=!musicEnabled; updateTogglesUI(); if(musicEnabled) await startMusic(); else stopMusic(); });
 
-    /* ===== общий рендер (бренд не рисуем на фото) ===== */
-    function renderFrame(targetCtx, {includeMascot=false}={}){
-      const W = canvas.clientWidth, H = canvas.clientHeight;
-      try { targetCtx.drawImage(video, 0, 0, W, H); } catch(e){}
-      targetCtx.fillStyle='rgba(255,255,255,0.015)';
-      targetCtx.fillRect(0,0,W,H);
-      drawSnow(targetCtx);
+/* ==== снимок ==== */
+shotBtn.addEventListener('click',()=>{
+  flash.classList.add('go'); setTimeout(()=>flash.classList.remove('go'),60);
+  const shot=document.createElement('canvas'); const W=canvas.clientWidth,H=canvas.clientHeight;
+  shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
+  const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
+  renderFrame(sctx,{includeMascot:true});
+  const save=(blob)=>{ const p=n=>String(n).padStart(2,'0'); const ts=new Date();
+    const fname=`christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
+    const file=new File([blob],fname,{type:'image/png'}); const share={files:[file],title:'christmas-spb.ru',text:'christmas-spb.ru'};
+    if(navigator.canShare && navigator.canShare(share)){ navigator.share(share).catch(()=>openInNewTabAsImage(blob)); return; }
+    if(!/iphone|ipad|ipod/i.test(navigator.userAgent)){ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); return; }
+    openInNewTabAsImage(blob);
+  };
+  if(shot.toBlob) shot.toBlob(save,'image/png',0.92);
+});
+function openInNewTabAsImage(blob){ const r=new FileReader(); r.onload=()=>{ const w=window.open('','_blank'); const html=`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style><div class="wrap"><img src="${r.result}" alt="photo"></div><div class="hint" style="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);color:#fff;font:14px system-ui;opacity:.8;text-shadow:0 1px 2px rgba(0,0,0,.6)">На iPhone: «Поделиться» → «Сохранить изображение»</div>`; if(w&&w.document){w.document.open();w.document.write(html);w.document.close();}else{document.open();document.write(html);document.close();}}; r.readAsDataURL(blob); }
 
-      if(includeMascot && mascotEnabled && mascotImg.complete){
-        const rC = canvas.getBoundingClientRect();
-        const rM = mascot.getBoundingClientRect();
-        const mx = (rM.left - rC.left);
-        const my = (rM.top  - rC.top );
-        const mw = rM.width;
-        const mh = rM.height;
-        try { targetCtx.drawImage(mascotImg, mx, my, mw, mh); } catch(e){}
-      }
-    }
+/* ==== перетаскивание и pinch ==== */
+const pointers=new Map(); let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function getTransform(){ const st=getComputedStyle(mascot); return {tx:parseFloat(st.getPropertyValue('--tx'))||0,ty:parseFloat(st.getPropertyValue('--ty'))||0,s:parseFloat(st.getPropertyValue('--s'))||1}; }
+function setTransform(tx,ty,s){ mascot.style.setProperty('--tx',tx+'px'); mascot.style.setProperty('--ty',ty+'px'); mascot.style.setProperty('--s',s); }
 
-    function loop(){
-      if(!running) return;
-      ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
-      renderFrame(ctx, {includeMascot:false});
-      requestAnimationFrame(loop);
-    }
+mascot.addEventListener('pointerdown',e=>{
+  if(!running || mascot.style.display==='none') return;
+  e.preventDefault(); mascot.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const n=pointers.size; const {tx,ty,s}=getTransform();
+  if(n===1){ dragId=e.pointerId; dragStartX=e.clientX; dragStartY=e.clientY; startTx=tx; startTy=ty; mascot.classList.add('dragging'); }
+  else if(n===2){ startScale=s; const [p1,p2]=Array.from(pointers.values()); startDist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1; mascot.classList.remove('dragging'); dragId=null; }
+},{passive:false});
 
-    /* ===== старт камеры (c мягким retry для AbortError) ===== */
-    async function start(){
-      try{
-        let stream;
-        try{
-          stream = await navigator.mediaDevices.getUserMedia({
-            video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
-            audio:false
-          });
-        }catch(e){
-          if (e && (e.name === 'AbortError' || /aborted/i.test(e.message||''))) {
-            await new Promise(r=>setTimeout(r, 300));
-            stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
-          } else {
-            throw e;
-          }
-        }
-
-        video.srcObject = stream;
-        try { await video.play(); }
-        catch(e){
-          await new Promise(r=>setTimeout(r, 120));
-          await video.play();
-        }
-
-        resize(); buildSprites(); initSnow();
-        running = true;
-
-        // показать всё остальное ТОЛЬКО после старта
-        brand.style.display = 'block';
-        controls.style.display = 'flex';
-        mascot.style.display = 'block';
-
-        if (startBtn) startBtn.remove();
-        requestAnimationFrame(loop);
-
-        // музыка включена по умолчанию — запускаем после жеста
-        if (musicEnabled) startMusic();
-
-      }catch(e){
-        alert('Не удалось открыть камеру: '+ e.message);
-      }
-    }
-    startBtn.addEventListener('click', start);
-
-    /* ===== тумблеры ===== */
-    function updateTogglesUI(){
-      btnSnow.classList.toggle('is-on', snowEnabled);
-      btnSnow.setAttribute('aria-pressed', String(snowEnabled));
-
-      btnMascot.classList.toggle('is-on', mascotEnabled);
-      btnMascot.setAttribute('aria-pressed', String(mascotEnabled));
-      mascot.style.display = mascotEnabled ? 'block' : 'none';
-
-      btnMusic.classList.toggle('is-on', musicEnabled);
-      btnMusic.setAttribute('aria-pressed', String(musicEnabled));
-      if (navigator.vibrate) navigator.vibrate(8);
-    }
-    btnSnow.addEventListener('click', ()=>{ snowEnabled = !snowEnabled; updateTogglesUI(); });
-    btnMascot.addEventListener('click', ()=>{ mascotEnabled = !mascotEnabled; updateTogglesUI(); });
-    btnMusic.addEventListener('click', async ()=>{
-      musicEnabled = !musicEnabled;
-      updateTogglesUI();
-      if (musicEnabled) await startMusic(); else stopMusic();
-    });
-    updateTogglesUI();
-
-    /* ===== снимок: фото без бренда; Share содержит текст "christmas-spb.ru" ===== */
-    shotBtn.addEventListener('click', () => {
-      flash.classList.add('go');
-      setTimeout(()=> flash.classList.remove('go'), 60);
-
-      const shot = document.createElement('canvas');
-      const Wcss = canvas.clientWidth, Hcss = canvas.clientHeight;
-      shot.width  = Math.floor(Wcss * CAPTURE_DPR);
-      shot.height = Math.floor(Hcss * CAPTURE_DPR);
-      const sctx = shot.getContext('2d');
-      sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
-
-      renderFrame(sctx, { includeMascot: true });
-
-      const save = (blob) => {
-        const p = n => String(n).padStart(2,'0');
-        const ts = new Date();
-        const fname = `christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
-        const file = new File([blob], fname, { type: 'image/png' });
-        const shareData = { files:[file], title:'christmas-spb.ru', text:'christmas-spb.ru' };
-
-        if (navigator.canShare && navigator.canShare(shareData)) {
-          navigator.share(shareData).catch(() => openInNewTabAsImage(blob));
-          return;
-        }
-        if (!/iphone|ipad|ipod/i.test(navigator.userAgent)) { downloadBlob(blob, fname); return; }
-        openInNewTabAsImage(blob);
-      };
-
-      if (shot.toBlob) shot.toBlob(save, 'image/png', 0.92);
-      else openDataURLInNewTab(shot.toDataURL('image/png'));
-    });
-
-    /* ===== утилиты сохранения ===== */
-    function downloadBlob(blob, fname) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fname;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
-    function openInNewTabAsImage(blob) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result;
-        const w = window.open('', '_blank');
-        const html = `
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Photo</title>
-<style>
-  html,body{height:100%;margin:0;background:#000;}
-  .wrap{height:100%;display:flex;align-items:center;justify-content:center;}
-  img{max-width:100vw;max-height:100vh;display:block}
-  .hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);
-        color:#fff;font:14px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-        opacity:.8;text-shadow:0 1px 2px rgba(0,0,0,.6);}
-</style></head>
-<body>
-  <div class="wrap"><img src="${dataUrl}" alt="photo"></div>
-  <div class="hint">На iPhone: «Поделиться» → «Сохранить изображение»</div>
-</body></html>`;
-        if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
-        else { document.open(); document.write(html); document.close(); }
-      };
-      reader.readAsDataURL(blob);
-    }
-    function openDataURLInNewTab(url) {
-      const w = window.open('', '_blank');
-      const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style><div class="wrap"><img src="${url}" alt="photo"></div>`;
-      if (w && w.document) { w.document.open(); w.document.write(html); w.document.close(); }
-      else { document.write(html); }
-    }
-
-    /* ===== перетаскивание и pinch масштаб ===== */
-    const pointers = new Map();
-    let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
-
-    function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
-    function getTransform(){
-      const st = getComputedStyle(mascot);
-      return {
-        tx: parseFloat(st.getPropertyValue('--tx'))||0,
-        ty: parseFloat(st.getPropertyValue('--ty'))||0,
-        s:  parseFloat(st.getPropertyValue('--s')) ||1
-      };
-    }
-    function setTransform(tx,ty,s){
-      mascot.style.setProperty('--tx', tx+'px');
-      mascot.style.setProperty('--ty', ty+'px');
-      mascot.style.setProperty('--s',  s);
-    }
-
-    mascot.addEventListener('pointerdown', (e)=>{
-      e.preventDefault();
-      mascot.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      const n = pointers.size;
-      const {tx,ty,s}=getTransform();
-      if(n===1){
-        dragId=e.pointerId; dragStartX=e.clientX; dragStartY=e.clientY; startTx=tx; startTy=ty; mascot.classList.add('dragging');
-      }else if(n===2){
-        startScale=s; const [p1,p2]=Array.from(pointers.values()); startDist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1; mascot.classList.remove('dragging'); dragId=null;
-      }
-    },{passive:false});
-
-    mascot.addEventListener('pointermove', (e)=>{
-      if(!pointers.has(e.pointerId)) return;
-      e.preventDefault();
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      const n=pointers.size; const {tx,ty,s}=getTransform();
-      if(n===1 && dragId!==null){
-        const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-дragStartY; setTransform(startTx+dx,startTy+dy,s);
-      }else if(n===2){
-        const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
-        const scale=clamp(startScale*(dist/startDist), 0.2, 5);
-        setTransform(tx,ty,scale);
-      }
-    },{passive:false});
-
-    function endPointer(e){
-      if(pointers.has(e.pointerId)) pointers.delete(e.pointerId);
-      if(e.pointerId===dragId){ dragId=null; mascot.classList.remove('dragging'); }
-      if(pointers.size===1){
-        const id=Array.from(pointers.keys())[0], pt=pointers.get(id), {tx,ty}=getTransform();
-        dragId=id; dragStartX=pt.x; dragStartY=pt.y; startTx=tx; startTy=ty; mascot.classList.add('dragging');
-      }
-    }
-    mascot.addEventListener('pointerup', endPointer, {passive:false});
-    mascot.addEventListener('pointercancel', endPointer, {passive:false});
-    mascot.addEventListener('pointerleave', endPointer, {passive:false});
-  </script>
+mascot.addEventListener('pointermove',e=>{
+  if(!pointers.has(e.pointerId)) return;
+  e.preventDefault(); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const n=pointers.size; const {tx,ty,s}=getTransform();
+  if(n===1 && dragId!==null){
+    const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-dragStartY;
+    setTransform(startTx+dx,startTy+dy,s);
+  }else if(n===2){
+    const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
+    const scale=clamp(startScale*(dist/startDist),0.2,5); setTransform(tx,ty,scale);
+  }
+},{passive:false});
+function endPointer(e){
+  if(pointers.has(e.pointerId)) pointers.delete(e.pointerId);
+  if(e.pointerId===dragId){ dragId=null; mascot.classList.remove('dragging'); }
+  if(pointers.size===1){
+    const id=Array.from(pointers.keys())[0], pt=pointers.get(id), {tx,ty}=getTransform();
+    dragId=id; dragStartX=pt.x; dragStartY=pt.y; startTx=tx; startTy=ty; mascot.classList.add('dragging');
+  }
+}
+mascot.addEventListener('pointerup',endPointer,{passive:false});
+mascot.addEventListener('pointercancel',endPointer,{passive:false});
+mascot.addEventListener('pointerleave',endPointer,{passive:false});
+</script>
 </body>
 </html>
