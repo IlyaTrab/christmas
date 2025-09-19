@@ -8,21 +8,19 @@
   <meta name="apple-mobile-web-app-title" content="Snow Cam">
   <meta name="theme-color" content="#000000">
   <style>
+    :root{
+      --fab-size:56px;
+      --fab-gap:.6rem;
+      --glass-bg:rgba(255,255,255,.12);
+      --glass-brd:rgba(255,255,255,.28);
+      --glass-on:rgba(255,255,255,.22);
+    }
     html,body {margin:0;height:100%;background:#000;overflow:hidden;}
     #wrap {position:fixed;inset:0;}
     video,canvas {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    *{-webkit-tap-highlight-color: transparent;}
 
-    /* маленькая кнопка-снимок */
-    #shotBtn{
-      position:fixed; width:56px; height:56px; border-radius:50%;
-      bottom:.9rem; right:.9rem; z-index:7;
-      background:rgba(255,255,255,.95); border:0;
-      font-size:24px; line-height:56px; text-align:center;
-      box-shadow:0 6px 16px rgba(0,0,0,.35);
-      display:none;
-    }
-
-    /* бренд сверху (только в live-слое) */
+    /* бренд сверху (live-слой) */
     #brand{
       position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
       font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -38,7 +36,7 @@
       border-radius:.75rem; border:0; background:#fff;
     }
 
-    /* снеговик/снегурочка (перетаскивание + pinch) */
+    /* персонаж (перетаскивание + pinch) */
     #mascot{
       position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
       width:24%; max-width:300px;
@@ -49,6 +47,37 @@
     }
     #mascot.dragging{cursor:grabbing;}
     #mascot img{display:block; width:100%; height:auto; pointer-events:none;}
+
+    /* панель кнопок (стекло) */
+    #controls{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom:.9rem; z-index:7; display:none;
+      display:flex; gap:var(--fab-gap);
+    }
+    .fab{
+      width:var(--fab-size); height:var(--fab-size); border-radius:999px;
+      display:inline-flex; align-items:center; justify-content:center;
+      background:var(--glass-bg);
+      border:1px solid var(--glass-brd);
+      backdrop-filter: blur(10px);
+      color:rgba(255,255,255,.78);
+      box-shadow:0 6px 18px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+      outline:none; cursor:pointer;
+      transition:transform .12s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .fab svg{ width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:2; vector-effect:non-scaling-stroke;}
+    .fab:active{ transform:scale(.96); }
+    .fab.is-on{
+      background:var(--glass-on);
+      color:#fff;
+      box-shadow:0 8px 22px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.12) inset;
+    }
+    /* акцент для камеры */
+    #shotBtn{
+      border:1px solid rgba(255,255,255,.35);
+      color:#fff;
+      background: linear-gradient(to bottom, rgba(255,255,255,.18), rgba(255,255,255,.10));
+    }
   </style>
 </head>
 <body>
@@ -57,39 +86,60 @@
     <canvas id="canvas"></canvas>
 
     <!-- персонаж как DOM-слой -->
-    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Character" draggable="false"></div>
+    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
   <div id="brand">christmas-spb.ru</div>
 
-  <!-- выбор персонажа -->
-  <div id="chooser" aria-label="Выбор персонажа" style="
-    position:fixed; left:.9rem; bottom:.9rem; z-index:7; display:none;
-    background:rgba(0,0,0,.35); backdrop-filter:blur(6px);
-    border-radius:999px; padding:.25rem;">
-    <button id="chooseSnowman"  title="Снеговик"   style="border:0;background:#fff;border-radius:999px;width:40px;height:40px;margin:.15rem;font-size:18px">⛄</button>
-    <button id="chooseSneg"     title="Снегурочка" style="border:0;background:#fff;border-radius:999px;width:40px;height:40px;margin:.15rem;font-size:18px">❄️</button>
+  <!-- стеклянная панель управления -->
+  <div id="controls" aria-label="Управление">
+    <!-- Тумблер снега -->
+    <button id="btnSnow" class="fab is-on" type="button" aria-label="Снег вкл/выкл" aria-pressed="true" title="Снег">
+      <!-- Snowflake icon -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v18M12 12l8.66-5M12 12l-8.66-5M12 12l8.66 5M12 12l-8.66 5M3 12h18M6 4.5l3 1.732M18 4.5l-3 1.732M6 19.5l3-1.732M18 19.5l-3-1.732"/>
+      </svg>
+    </button>
+
+    <!-- Тумблер снеговика -->
+    <button id="btnMascot" class="fab is-on" type="button" aria-label="Снеговик вкл/выкл" aria-pressed="true" title="Снеговик">
+      <!-- Snowman icon -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="9" r="3.2"/>
+        <circle cx="12" cy="16.5" r="5"/>
+        <path d="M8.5 6.8h7M9 6l6-.6M4 11l3-2M20 11l-3-2"/>
+      </svg>
+    </button>
+
+    <!-- Фото -->
+    <button id="shotBtn" class="fab" type="button" aria-label="Сделать фото" title="Сделать фото">
+      <!-- Camera icon -->
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>
+        <circle cx="12" cy="14" r="3.2"/>
+      </svg>
+    </button>
   </div>
 
-  <button id="shotBtn" aria-label="Сделать фото" title="Сделать фото">📷</button>
   <button id="start">Запустить камеру</button>
 
   <script>
     const startBtn  = document.getElementById('start');
-    const shotBtn   = document.getElementById('shotBtn');
+    const shotBtn   = document.getElementById('shotBtn');   // внутри #controls
+    const btnSnow   = document.getElementById('btnSnow');
+    const btnMascot = document.getElementById('btnMascot');
+    const controls  = document.getElementById('controls');
+
     const video     = document.getElementById('video');
     const canvas    = document.getElementById('canvas');
     const ctx       = canvas.getContext('2d', { alpha:true });
     const mascot    = document.getElementById('mascot');
     const mascotImg = document.getElementById('mascotImg');
-    const chooser   = document.getElementById('chooser');
-    const btnSnow   = document.getElementById('chooseSnowman');
-    const btnSneg   = document.getElementById('chooseSneg');
 
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
     const CAPTURE_DPR = DPR;
 
-    let running=false, flakes=[], sprites=[];
+    let running=false, flakes=[], sprites=[], snowEnabled=true, mascotEnabled=true;
 
     /* ---- снежинки (компактные) ---- */
     function makeFlakeSprite(size){
@@ -130,6 +180,7 @@
     }
 
     function drawSnow(targetCtx){
+      if(!snowEnabled) return;
       for(const f of flakes){
         f.theta += f.swaySpeed;
         const x = f.x0 + Math.sin(f.theta)*f.swayAmp;
@@ -144,10 +195,9 @@
       }
     }
 
-    /* ---- общий рендер кадра (ожидает, что targetCtx уже в CSS-координатах) ---- */
+    /* ---- общий рендер кадра ---- */
     function renderFrame(targetCtx, {includeMascot=false, includeBrand=false}={}){
       const W = canvas.clientWidth, H = canvas.clientHeight;
-
       try { targetCtx.drawImage(video, 0, 0, W, H); } catch(e){}
       targetCtx.fillStyle='rgba(255,255,255,0.015)';
       targetCtx.fillRect(0,0,W,H);
@@ -163,7 +213,7 @@
         targetCtx.restore();
       }
 
-      if(includeMascot && mascotImg.complete){
+      if(includeMascot && mascotEnabled && mascotImg.complete){
         const rC = canvas.getBoundingClientRect();
         const rM = mascot.getBoundingClientRect();
         const mx = (rM.left - rC.left);
@@ -177,6 +227,7 @@
     function loop(){
       if(!running) return;
       ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+      // live: бренд не рисуем на canvas, чтобы не дублировать DOM-надпись
       renderFrame(ctx, {includeMascot:false, includeBrand:false});
       requestAnimationFrame(loop);
     }
@@ -193,10 +244,8 @@
         resize(); buildSprites(); initSnow();
         running = true;
         startBtn.remove();
-        shotBtn.style.display='block';
-        chooser.style.display='flex';
+        controls.style.display='flex';
         mascot.style.display='block';
-        setCharacter('snowman'); // стартовый
         requestAnimationFrame(loop);
       }catch(e){
         alert('Не удалось открыть камеру: '+e.message);
@@ -204,23 +253,16 @@
     }
     startBtn.addEventListener('click', start);
 
-    /* ---- выбор персонажа ---- */
-    function setCharacter(name){
-      // меняем источник, чуть нормализуем стартовую ширину
-      if(name === 'snegurochka'){
-        mascotImg.src = 'assets/snegurochka.gif';
-        mascot.style.width = '28%';
-      }else{
-        mascotImg.src = 'assets/snowman.gif';
-        mascot.style.width = '24%';
-      }
-      // если хочешь сброс позиции/масштаба при смене — раскомментируй:
-      // mascot.style.setProperty('--tx','0px');
-      // mascot.style.setProperty('--ty','0px');
-      // mascot.style.setProperty('--s','1');
+    /* ---- Тумблеры ---- */
+    function updateTogglesUI(){
+      btnSnow.classList.toggle('is-on', snowEnabled);
+      btnSnow.setAttribute('aria-pressed', String(snowEnabled));
+      btnMascot.classList.toggle('is-on', mascotEnabled);
+      btnMascot.setAttribute('aria-pressed', String(mascotEnabled));
+      mascot.style.display = mascotEnabled ? 'block' : 'none';
     }
-    btnSnow.addEventListener('click', ()=>setCharacter('snowman'));
-    btnSneg.addEventListener('click', ()=>setCharacter('snegurochka'));
+    btnSnow.addEventListener('click', ()=>{ snowEnabled = !snowEnabled; updateTogglesUI(); });
+    btnMascot.addEventListener('click', ()=>{ mascotEnabled = !mascotEnabled; updateTogglesUI(); });
 
     /* ---- Снимок: Share Sheet / download / новая вкладка с <img> ---- */
     shotBtn.addEventListener('click', () => {
@@ -230,6 +272,7 @@
       shot.height = Math.floor(Hcss * CAPTURE_DPR);
       const sctx = shot.getContext('2d');
       sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
+      // в снимке рисуем бренд и (если включён) персонажа
       renderFrame(sctx, { includeMascot: true, includeBrand: true });
 
       const save = (blob) => {
@@ -263,7 +306,6 @@
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     }
-
     function openInNewTabAsImage(blob) {
       const reader = new FileReader();
       reader.onload = () => {
@@ -289,7 +331,6 @@
       };
       reader.readAsDataURL(blob);
     }
-
     function openDataURLInNewTab(url) {
       const w = window.open('', '_blank');
       const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{height:100%;margin:0;background:#000}.wrap{height:100%;display:flex;align-items:center;justify-content:center}img{max-width:100vw;max-height:100vh;display:block}</style><div class="wrap"><img src="${url}" alt="photo"></div>`;
@@ -354,6 +395,9 @@
     mascot.addEventListener('pointerup', endPointer, {passive:false});
     mascot.addEventListener('pointercancel', endPointer, {passive:false});
     mascot.addEventListener('pointerleave', endPointer, {passive:false});
+
+    // начальные стили тумблеров
+    updateTogglesUI();
   </script>
 </body>
 </html>
