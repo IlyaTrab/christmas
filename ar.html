@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8">
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+<style>html,body{margin:0;height:100%;background:#000}</style>
+
+<model-viewer id="mv"
+  src="assets/snowman.glb"
+  ar ar-modes="scene-viewer quick-look webxr"
+  camera-controls shadow-intensity="1"
+  style="position:fixed;inset:0;width:100%;height:100%;">
+  <button slot="ar-button" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);padding:.8rem 1.2rem;border-radius:.8rem;border:0">Открыть в AR</button>
+</model-viewer>
+
+<script>
+  // Можно автозапустить AR сразу (по клику из основной страницы):
+  const url = new URL(location.href);
+  if (url.searchParams.get('autoplay') === '1') {
+    const mv = document.getElementById('mv');
+    // activateAR() открывает Quick Look/Scene Viewer
+    mv.addEventListener('load', () => mv.activateAR());
+  }
+</script>
