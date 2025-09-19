@@ -136,7 +136,7 @@
     </button>
   </div>
 
-  <!-- ВАЖНО: inline onclick — запасной маршрут для iOS -->
+  <!-- inline onclick — резерв для iOS -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
   <script>
@@ -244,7 +244,7 @@
       requestAnimationFrame(loop);
     }
 
-    /* ===== старт камеры (с анти-AbortError retry) ===== */
+    /* ===== старт камеры (c мягким retry для AbortError) ===== */
     async function start(){
       try{
         let stream;
@@ -255,7 +255,6 @@
           });
         }catch(e){
           if (e && (e.name === 'AbortError' || /aborted/i.test(e.message||''))) {
-            // короткая пауза и упрощённые ограничения
             await new Promise(r=>setTimeout(r, 300));
             stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
           } else {
@@ -266,7 +265,6 @@
         video.srcObject = stream;
         try { await video.play(); }
         catch(e){
-          // повторный play() после микропауы, если что-то прервалось
           await new Promise(r=>setTimeout(r, 120));
           await video.play();
         }
@@ -281,7 +279,7 @@
         alert('Не удалось открыть камеру: '+ e.message);
       }
     }
-    // запасной слушатель (дублируем inline onclick)
+    // дублируем на всякий случай помимо inline onclick
     startBtn.addEventListener('click', start);
 
     /* ===== тумблеры ===== */
@@ -298,7 +296,6 @@
     updateTogglesUI();
 
     /* ===== снимок: фото без бренда; Share содержит текст "christmas-spb.ru" ===== */
-    const flash = document.getElementById('flash');
     shotBtn.addEventListener('click', () => {
       flash.classList.add('go');
       setTimeout(()=> flash.classList.remove('go'), 60);
