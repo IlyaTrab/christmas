@@ -63,6 +63,7 @@
     }
 
     .fab{
+      position:relative;
       width:var(--fab-size); height:var(--fab-size); border-radius:999px;
       display:inline-flex; align-items:center; justify-content:center;
       background:var(--glass-bg);
@@ -108,14 +109,14 @@
 
   <!-- стеклянная панель управления (по центру) -->
   <div id="controls" aria-label="Управление">
-    <!-- Тумблер снега -->
+    <!-- ❄️ Снег -->
     <button id="btnSnow" class="fab is-on" type="button" aria-label="Снег вкл/выкл" aria-pressed="true" title="Снег">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 2v20M12 12L21 7M12 12L3 7M12 12l9 5M12 12L3 17M2 12h20M7 4l3 1.8M17 4l-3 1.8M7 20l3-1.8M17 20l-3-1.8"/>
       </svg>
     </button>
 
-    <!-- Тумблер снеговика -->
+    <!-- ⛄ Снеговик -->
     <button id="btnMascot" class="fab is-on" type="button" aria-label="Снеговик вкл/выкл" aria-pressed="true" title="Снеговик">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <g transform="translate(0.5 0.5)">
@@ -127,7 +128,15 @@
       </svg>
     </button>
 
-    <!-- Фото -->
+    <!-- 🎵 Музыка -->
+    <button id="btnMusic" class="fab is-on" type="button" aria-label="Музыка вкл/выкл" aria-pressed="true" title="Музыка">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+        <path d="M9 12V5l10-2v7"/>
+      </svg>
+    </button>
+
+    <!-- 📷 Фото -->
     <button id="shotBtn" class="fab" type="button" aria-label="Сделать фото" title="Сделать фото">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/>
@@ -136,7 +145,7 @@
     </button>
   </div>
 
-  <!-- inline onclick — резерв для iOS -->
+  <!-- inline onclick — запасной маршрут для iOS -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
   <script>
@@ -147,6 +156,7 @@
     const shotBtn   = document.getElementById('shotBtn');
     const btnSnow   = document.getElementById('btnSnow');
     const btnMascot = document.getElementById('btnMascot');
+    const btnMusic  = document.getElementById('btnMusic');
     const controls  = document.getElementById('controls');
     const flash     = document.getElementById('flash');
 
@@ -162,7 +172,66 @@
 
     // --- состояние ---
     let running=false, flakes=[], sprites=[],
-        snowEnabled=true, mascotEnabled=true;
+        snowEnabled=true, mascotEnabled=true,
+        musicEnabled=true;
+
+    // ===== аудио (фон) =====
+    let bgm=null, audioCtx=null, gain=null, musicReady=false;
+
+    function initAudio(){
+      if (bgm) return;
+      bgm = new Audio();
+      bgm.loop = true;
+      bgm.preload = 'auto';
+      bgm.src = 'assets/song.mp3'; // добавь этот файл
+
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        audioCtx = new AC();
+        const src = audioCtx.createMediaElementSource(bgm);
+        gain = audioCtx.createGain();
+        gain.gain.value = 0.0;
+        src.connect(gain).connect(audioCtx.destination);
+      } else {
+        bgm.volume = 0.0; // без WebAudio просто будем менять volume
+      }
+      musicReady = true;
+    }
+
+    async function startMusic(){
+      try{
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+        await bgm.play();
+        fadeTo(0.6, 0.5);
+      }catch(e){
+        // если автоплей не дал — выключим индикатор
+        musicEnabled = false;
+        updateTogglesUI();
+        console.log('BGM play blocked:', e);
+      }
+    }
+
+    function stopMusic(){
+      // плавно затухаем и ставим паузу
+      fadeTo(0.0, 0.4);
+      setTimeout(()=> { try{ bgm.pause(); }catch(_){} }, 420);
+    }
+
+    function fadeTo(target = 0.6, dur = 0.4){
+      if (gain && audioCtx) {
+        const now = audioCtx.currentTime;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(target, now + dur);
+      } else if (bgm) {
+        const from = bgm.volume, steps = Math.max(1, Math.floor(dur*30));
+        let i=0; const t = setInterval(()=>{
+          i++; bgm.volume = from + (target-from)*i/steps;
+          if (i>=steps) clearInterval(t);
+        }, 1000/30);
+      }
+    }
 
     /* ===== снежинки ===== */
     function makeFlakeSprite(size){
@@ -275,24 +344,37 @@
         controls.style.display='flex';
         mascot.style.display='block';
         requestAnimationFrame(loop);
+
+        // стартуем музыку по умолчанию (жест уже был — кнопка "Запустить камеру")
+        if (musicEnabled) startMusic();
+
       }catch(e){
         alert('Не удалось открыть камеру: '+ e.message);
       }
     }
-    // дублируем на всякий случай помимо inline onclick
+    // дублируем обработчик на всякий
     startBtn.addEventListener('click', start);
 
     /* ===== тумблеры ===== */
     function updateTogglesUI(){
       btnSnow.classList.toggle('is-on', snowEnabled);
       btnSnow.setAttribute('aria-pressed', String(snowEnabled));
+
       btnMascot.classList.toggle('is-on', mascotEnabled);
       btnMascot.setAttribute('aria-pressed', String(mascotEnabled));
       mascot.style.display = mascotEnabled ? 'block' : 'none';
+
+      btnMusic.classList.toggle('is-on', musicEnabled);
+      btnMusic.setAttribute('aria-pressed', String(musicEnabled));
       if (navigator.vibrate) navigator.vibrate(8);
     }
     btnSnow.addEventListener('click', ()=>{ snowEnabled = !snowEnabled; updateTogglesUI(); });
     btnMascot.addEventListener('click', ()=>{ mascotEnabled = !mascotEnabled; updateTogglesUI(); });
+    btnMusic.addEventListener('click', async ()=>{
+      musicEnabled = !musicEnabled;
+      updateTogglesUI();
+      if (musicEnabled) await startMusic(); else stopMusic();
+    });
     updateTogglesUI();
 
     /* ===== снимок: фото без бренда; Share содержит текст "christmas-spb.ru" ===== */
