@@ -55,15 +55,12 @@
     #mascot.dragging{cursor:grabbing;}
     #mascot img{display:block; width:100%; height:auto; pointer-events:none;}
 
-    /* панель кнопок (стекло) */
+    /* панель кнопок (стекло) — ВСЕГДА ПО ЦЕНТРУ */
     #controls{
       position:fixed; bottom:.9rem; z-index:7; display:none;
       display:flex; gap:var(--fab-gap);
+      left:50%; transform:translateX(-50%);
     }
-    /* варианты докинга */
-    .dock-center{ left:50%; transform:translateX(-50%); }
-    .dock-left{ left:.9rem; transform:none; }
-    .dock-right{ right:.9rem; transform:none; }
 
     .fab{
       width:var(--fab-size); height:var(--fab-size); border-radius:999px;
@@ -85,18 +82,6 @@
     }
     .fab:hover{ filter:brightness(1.08); }
     .fab:focus-visible{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
-
-    /* мини-кнопка позиции */
-    #dockBtn{
-      position:fixed; bottom:calc(.9rem + var(--fab-size) + .6rem); left:.9rem; z-index:7;
-      width:44px; height:44px; border-radius:999px; border:1px solid var(--glass-brd);
-      background:rgba(255,255,255,.10); backdrop-filter:blur(8px); color:#fff;
-      display:none; align-items:center; justify-content:center; cursor:pointer;
-      box-shadow:0 6px 18px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.05);
-      transition:transform .12s ease, background .15s ease;
-    }
-    #dockBtn:active{ transform:scale(.96); }
-    #dockBtn svg{ width:22px; height:22px; stroke:#fff; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
     /* акцент для камеры */
     #shotBtn{
@@ -121,8 +106,8 @@
   <!-- бренд (только на экране) -->
   <div id="brand">christmas-spb.ru</div>
 
-  <!-- стеклянная панель управления -->
-  <div id="controls" class="dock-center" aria-label="Управление">
+  <!-- стеклянная панель управления (по центру) -->
+  <div id="controls" aria-label="Управление">
     <!-- Тумблер снега -->
     <button id="btnSnow" class="fab is-on" type="button" aria-label="Снег вкл/выкл" aria-pressed="true" title="Снег">
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -151,14 +136,7 @@
     </button>
   </div>
 
-  <!-- кнопка смены позиции панели -->
-  <button id="dockBtn" title="Позиция панели" aria-label="Позиция панели">
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 6h18M3 12h18M3 18h18"/>
-    </svg>
-  </button>
-
-  <!-- ВАЖНО: onclick резерв — если что-то помешает addEventListener, кнопка всё равно вызовет start() -->
+  <!-- ВАЖНО: inline onclick — запасной маршрут для iOS -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
   <script>
@@ -170,7 +148,6 @@
     const btnSnow   = document.getElementById('btnSnow');
     const btnMascot = document.getElementById('btnMascot');
     const controls  = document.getElementById('controls');
-    const dockBtn   = document.getElementById('dockBtn');
     const flash     = document.getElementById('flash');
 
     const video     = document.getElementById('video');
@@ -185,10 +162,9 @@
 
     // --- состояние ---
     let running=false, flakes=[], sprites=[],
-        snowEnabled=true, mascotEnabled=true,
-        dockPos = 1; // 0=left, 1=center, 2=right
+        snowEnabled=true, mascotEnabled=true;
 
-    // ===== снежинки =====
+    /* ===== снежинки ===== */
     function makeFlakeSprite(size){
       const s = Math.max(10, size|0);
       const off = document.createElement('canvas');
@@ -242,7 +218,7 @@
       }
     }
 
-    // ===== общий рендер (бренд не рисуем на фото) =====
+    /* ===== общий рендер (бренд не рисуем на фото) ===== */
     function renderFrame(targetCtx, {includeMascot=false}={}){
       const W = canvas.clientWidth, H = canvas.clientHeight;
       try { targetCtx.drawImage(video, 0, 0, W, H); } catch(e){}
@@ -268,32 +244,47 @@
       requestAnimationFrame(loop);
     }
 
-    // ===== старт камеры =====
+    /* ===== старт камеры (с анти-AbortError retry) ===== */
     async function start(){
       try{
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
-          audio:false
-        });
+        let stream;
+        try{
+          stream = await navigator.mediaDevices.getUserMedia({
+            video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}},
+            audio:false
+          });
+        }catch(e){
+          if (e && (e.name === 'AbortError' || /aborted/i.test(e.message||''))) {
+            // короткая пауза и упрощённые ограничения
+            await new Promise(r=>setTimeout(r, 300));
+            stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+          } else {
+            throw e;
+          }
+        }
+
         video.srcObject = stream;
-        await video.play();
+        try { await video.play(); }
+        catch(e){
+          // повторный play() после микропауы, если что-то прервалось
+          await new Promise(r=>setTimeout(r, 120));
+          await video.play();
+        }
 
         resize(); buildSprites(); initSnow();
         running = true;
         if (startBtn) startBtn.remove();
         controls.style.display='flex';
-        dockBtn.style.display='flex';
         mascot.style.display='block';
-        updateDock();
         requestAnimationFrame(loop);
       }catch(e){
         alert('Не удалось открыть камеру: '+ e.message);
       }
     }
-    // резервный слушатель (помимо inline onclick, чтобы точно сработало)
+    // запасной слушатель (дублируем inline onclick)
     startBtn.addEventListener('click', start);
 
-    // ===== тумблеры =====
+    /* ===== тумблеры ===== */
     function updateTogglesUI(){
       btnSnow.classList.toggle('is-on', snowEnabled);
       btnSnow.setAttribute('aria-pressed', String(snowEnabled));
@@ -306,18 +297,8 @@
     btnMascot.addEventListener('click', ()=>{ mascotEnabled = !mascotEnabled; updateTogglesUI(); });
     updateTogglesUI();
 
-    // ===== докинг панели (left / center / right) =====
-    function updateDock(){
-      controls.classList.remove('dock-left','dock-center','dock-right');
-      controls.classList.add(dockPos===0?'dock-left':dockPos===1?'dock-center':'dock-right');
-    }
-    dockBtn.addEventListener('click', ()=>{
-      dockPos = (dockPos + 1) % 3;
-      updateDock();
-      if (navigator.vibrate) navigator.vibrate(8);
-    });
-
-    // ===== снимок: фото без бренда; Share содержит текст "christmas-spb.ru" =====
+    /* ===== снимок: фото без бренда; Share содержит текст "christmas-spb.ru" ===== */
+    const flash = document.getElementById('flash');
     shotBtn.addEventListener('click', () => {
       flash.classList.add('go');
       setTimeout(()=> flash.classList.remove('go'), 60);
@@ -350,7 +331,7 @@
       else openDataURLInNewTab(shot.toDataURL('image/png'));
     });
 
-    // ===== утилиты сохранения =====
+    /* ===== утилиты сохранения ===== */
     function downloadBlob(blob, fname) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -392,7 +373,7 @@
       else { document.write(html); }
     }
 
-    // ===== перетаскивание и pinch масштаб =====
+    /* ===== перетаскивание и pinch масштаб ===== */
     const pointers = new Map();
     let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
 
