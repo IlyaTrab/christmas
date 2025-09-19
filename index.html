@@ -20,13 +20,14 @@
     video,canvas {position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
     *{-webkit-tap-highlight-color: transparent;}
 
-    /* бренд сверху (live-слой; НЕ попадает в фото) */
+    /* бренд (скрыт до старта) */
     #brand{
       position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
       font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
       color:#fff; letter-spacing:.5px; opacity:.9;
       text-shadow:0 1px 2px rgba(0,0,0,.6);
       z-index:6; user-select:none; pointer-events:none;
+      display:none; /* покажем после старта */
     }
 
     /* вспышка камеры */
@@ -36,7 +37,7 @@
     }
     #flash.go{ opacity:.9; }
 
-    /* запуск камеры */
+    /* запуск камеры (единственное, что видно изначально) */
     #start{
       position:fixed; left:1rem; right:1rem; bottom:1.2rem; z-index:7;
       padding:.9rem 1.1rem; font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -55,7 +56,7 @@
     #mascot.dragging{cursor:grabbing;}
     #mascot img{display:block; width:100%; height:auto; pointer-events:none;}
 
-    /* панель кнопок (стекло) — ВСЕГДА ПО ЦЕНТРУ */
+    /* панель кнопок (стекло) — по центру, скрыта до старта */
     #controls{
       position:fixed; bottom:.9rem; z-index:7; display:none;
       display:flex; gap:var(--fab-gap);
@@ -104,7 +105,7 @@
   <!-- вспышка -->
   <div id="flash"></div>
 
-  <!-- бренд (только на экране) -->
+  <!-- бренд (только на экране, покажем после старта) -->
   <div id="brand">christmas-spb.ru</div>
 
   <!-- стеклянная панель управления (по центру) -->
@@ -145,7 +146,7 @@
     </button>
   </div>
 
-  <!-- inline onclick — запасной маршрут для iOS -->
+  <!-- единственный элемент, видимый до старта -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
   <script>
@@ -159,6 +160,7 @@
     const btnMusic  = document.getElementById('btnMusic');
     const controls  = document.getElementById('controls');
     const flash     = document.getElementById('flash');
+    const brand     = document.getElementById('brand');
 
     const video     = document.getElementById('video');
     const canvas    = document.getElementById('canvas');
@@ -166,14 +168,13 @@
     const mascot    = document.getElementById('mascot');
     const mascotImg = document.getElementById('mascotImg');
 
-    // --- параметры рендера ---
+    // --- рендер ---
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
     const CAPTURE_DPR = DPR;
 
     // --- состояние ---
     let running=false, flakes=[], sprites=[],
-        snowEnabled=true, mascotEnabled=true,
-        musicEnabled=true;
+        snowEnabled=true, mascotEnabled=true, musicEnabled=true;
 
     // ===== аудио (фон) =====
     let bgm=null, audioCtx=null, gain=null, musicReady=false;
@@ -183,7 +184,7 @@
       bgm = new Audio();
       bgm.loop = true;
       bgm.preload = 'auto';
-      bgm.src = 'assets/song.mp3'; // добавь этот файл
+      bgm.src = 'assets/song.mp3'; // добавь этот файл в репозиторий
 
       const AC = window.AudioContext || window.webkitAudioContext;
       if (AC) {
@@ -193,7 +194,7 @@
         gain.gain.value = 0.0;
         src.connect(gain).connect(audioCtx.destination);
       } else {
-        bgm.volume = 0.0; // без WebAudio просто будем менять volume
+        bgm.volume = 0.0;
       }
       musicReady = true;
     }
@@ -205,20 +206,13 @@
         await bgm.play();
         fadeTo(0.6, 0.5);
       }catch(e){
-        // если автоплей не дал — выключим индикатор
         musicEnabled = false;
         updateTogglesUI();
         console.log('BGM play blocked:', e);
       }
     }
-
-    function stopMusic(){
-      // плавно затухаем и ставим паузу
-      fadeTo(0.0, 0.4);
-      setTimeout(()=> { try{ bgm.pause(); }catch(_){} }, 420);
-    }
-
-    function fadeTo(target = 0.6, dur = 0.4){
+    function stopMusic(){ fadeTo(0.0, 0.4); setTimeout(()=>{ try{ bgm.pause(); }catch(_){} }, 420); }
+    function fadeTo(target=0.6, dur=0.4){
       if (gain && audioCtx) {
         const now = audioCtx.currentTime;
         gain.gain.cancelScheduledValues(now);
@@ -226,10 +220,7 @@
         gain.gain.linearRampToValueAtTime(target, now + dur);
       } else if (bgm) {
         const from = bgm.volume, steps = Math.max(1, Math.floor(dur*30));
-        let i=0; const t = setInterval(()=>{
-          i++; bgm.volume = from + (target-from)*i/steps;
-          if (i>=steps) clearInterval(t);
-        }, 1000/30);
+        let i=0; const t=setInterval(()=>{ i++; bgm.volume = from + (target-from)*i/steps; if(i>=steps) clearInterval(t); }, 1000/30);
       }
     }
 
@@ -340,19 +331,22 @@
 
         resize(); buildSprites(); initSnow();
         running = true;
+
+        // показать всё остальное ТОЛЬКО после старта
+        brand.style.display = 'block';
+        controls.style.display = 'flex';
+        mascot.style.display = 'block';
+
         if (startBtn) startBtn.remove();
-        controls.style.display='flex';
-        mascot.style.display='block';
         requestAnimationFrame(loop);
 
-        // стартуем музыку по умолчанию (жест уже был — кнопка "Запустить камеру")
+        // музыка включена по умолчанию — запускаем после жеста
         if (musicEnabled) startMusic();
 
       }catch(e){
         alert('Не удалось открыть камеру: '+ e.message);
       }
     }
-    // дублируем обработчик на всякий
     startBtn.addEventListener('click', start);
 
     /* ===== тумблеры ===== */
@@ -490,7 +484,7 @@
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const n=pointers.size; const {tx,ty,s}=getTransform();
       if(n===1 && dragId!==null){
-        const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-dragStartY; setTransform(startTx+dx,startTy+dy,s);
+        const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-дragStartY; setTransform(startTx+dx,startTy+dy,s);
       }else if(n===2){
         const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
         const scale=clamp(startScale*(dist/startDist), 0.2, 5);
