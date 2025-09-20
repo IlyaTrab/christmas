@@ -11,47 +11,29 @@
   <style>
     html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
     model-viewer{position:fixed;inset:0;width:100%;height:100%}
-
-    /* Кнопка AR */
     .ar-btn{
       position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
       padding:.9rem 1.2rem;border-radius:.8rem;border:1px solid rgba(255,255,255,.3);
       background:rgba(255,255,255,.15);backdrop-filter:blur(10px);
       color:#fff;font:600 16px;box-shadow:0 6px 18px rgba(0,0,0,.35);
     }
-
-    /* Оверлей загрузки/ошибки */
-    #overlay{
-      position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-      background:linear-gradient(180deg, rgba(0,0,0,.85), rgba(0,0,0,.65));
-      text-align:center;padding:24px;z-index:2;
+    #hud{
+      position:fixed;top:10px;left:50%;transform:translateX(-50%);
+      font-size:12px;opacity:.85;text-shadow:0 1px 2px rgba(0,0,0,.6)
     }
-    #overlay.hidden{display:none;}
-    #overlay .box{
-      max-width:560px;border:1px solid rgba(255,255,255,.25);
-      background:rgba(255,255,255,.08);backdrop-filter:blur(8px);
-      padding:16px 18px;border-radius:12px;
-    }
-    #msg{opacity:.9}
-    #err{margin-top:10px; font-size:13px; color:#ffbfbf; white-space:pre-wrap; word-break:break-word; display:none;}
-    a.fallback{display:inline-block;margin-top:12px;color:#fff;opacity:.9}
   </style>
 </head>
 <body>
 
-  <!-- Сообщения загрузки/ошибки -->
-  <div id="overlay">
-    <div class="box">
-      <div id="msg">Загружаю 3D-снеговика…</div>
-      <div id="err"></div>
-      <a id="fallbackLink" class="fallback" href="#" target="_blank" rel="noopener" style="display:none">Открыть модель отдельно</a>
-    </div>
-  </div>
+  <div id="hud">Подсказка: в AR перемещай модель одним пальцем, масштабируй пинч-жестом.</div>
 
   <model-viewer id="mv"
-    src="assets/snowman.glb?v=1"
+    src="assets/snowman.glb"
     ar ar-modes="scene-viewer quick-look webxr"
+    ar-placement="floor"           <!-- ставим на пол -->
+    ar-scale="auto"                <!-- разрешаем масштаб в AR жестами -->
     camera-controls
+    auto-rotate auto-rotate-delay="0"
     shadow-intensity="1"
     exposure="1.0"
     environment-image="neutral">
@@ -60,60 +42,35 @@
 
   <script>
     const mv = document.getElementById('mv');
-    const overlay = document.getElementById('overlay');
-    const msg = document.getElementById('msg');
-    const errEl = document.getElementById('err');
-    const fallback = document.getElementById('fallbackLink');
 
-    // Путь к GLB (на всякий случай показываем пользователю)
-    const glbURL = new URL(mv.getAttribute('src'), location.href).href;
-    fallback.href = glbURL;
+    // Начальный масштаб/поворот модели (чтобы не была гигантской)
+    // Подстрой значение 'S' если всё ещё великовато/мелковато.
+    const S = 0.25;                           // 25% от исходного размера
+    const YAW_DEG = 0;                        // можно поставить 180, если «смотрит спиной»
 
-    // Когда модель загружена — убираем оверлей
     mv.addEventListener('load', () => {
-      overlay.classList.add('hidden');
+      try {
+        // доступ к сцене модели
+        const m = mv.model;
+        if (m) {
+          m.scale.set(S, S, S);
+          m.rotation.set(0, YAW_DEG * Math.PI / 180, 0);
+          m.position.set(0, 0, 0);
+        }
+      } catch (e) {
+        console.warn('Не удалось применить масштаб/поворот через API model-viewer:', e);
+      }
     });
 
-    // Ошибки загрузки/рендера — покажем на экране
-    mv.addEventListener('error', (e) => {
-      overlay.classList.remove('hidden');
-      const detail = (e && e.detail && (e.detail.message || e.detail)) || e.message || String(e);
-      msg.textContent = 'Не удалось загрузить модель.';
-      errEl.style.display = 'block';
-      errEl.textContent = `Проверь путь:\n${glbURL}\n\nОшибка:\n${detail}`;
-      fallback.style.display = 'inline-block';
-      console.error('model-viewer error:', e);
-    });
-
-    // Автовызов AR при ?autoplay=1
+    // Автозапуск AR, если пришли с ?autoplay=1
     const qs = new URL(location.href).searchParams;
     if (qs.get('autoplay') === '1') {
       const tryActivate = () => {
-        if (mv.activateAR) {
-          mv.activateAR().catch((e) => {
-            // Если нужен ручной тап — просто игнор, кнопка AR видна
-            console.log('activateAR blocked until user gesture:', e);
-          });
-        }
+        if (mv.activateAR) mv.activateAR().catch(()=>{ /* нужен ручной тап — это ок */ });
       };
-      // Если уже загрузилось — дергаем сразу, иначе ждём load
       if (mv.loaded) tryActivate();
       else mv.addEventListener('load', tryActivate, { once: true });
     }
-
-    // Небольшая диагностика путей: проверим доступность GLB с HEAD-запросом
-    // (в некоторых окружениях может блокироваться CORS для HEAD — не критично)
-    fetch(glbURL, { method: 'HEAD' })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      })
-      .catch(err => {
-        overlay.classList.remove('hidden');
-        msg.textContent = 'Файл модели недоступен.';
-        errEl.style.display = 'block';
-        errEl.textContent = `Путь:\n${glbURL}\n\nОтвет:\n${err.message}`;
-        fallback.style.display = 'inline-block';
-      });
   </script>
 </body>
 </html>
