@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>AR — Snowman</title>
 
-  <!-- model-viewer -->
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 
   <style>
@@ -25,13 +24,13 @@
 </head>
 <body>
 
-  <div id="hud">Подсказка: в AR перемещай модель одним пальцем, масштабируй пинч-жестом.</div>
+  <div id="hud">В AR: перетаскивай одним пальцем, масштаб — пинч. Если у модели есть анимация — она запустится.</div>
 
   <model-viewer id="mv"
     src="assets/snowman.glb"
     ar ar-modes="scene-viewer quick-look webxr"
-    ar-placement="floor"           <!-- ставим на пол -->
-    ar-scale="auto"                <!-- разрешаем масштаб в AR жестами -->
+    ar-placement="floor"
+    ar-scale="auto"
     camera-controls
     auto-rotate auto-rotate-delay="0"
     shadow-intensity="1"
@@ -43,33 +42,38 @@
   <script>
     const mv = document.getElementById('mv');
 
-    // Начальный масштаб/поворот модели (чтобы не была гигантской)
-    // Подстрой значение 'S' если всё ещё великовато/мелковато.
-    const S = 0.25;                           // 25% от исходного размера
-    const YAW_DEG = 0;                        // можно поставить 180, если «смотрит спиной»
+    // Начальный масштаб/ориентация в 3D-просмотре до входа в AR
+    const START_SCALE = 0.15;   // УМЕНЬШИ при необходимости (например, 0.08)
+    const YAW_DEG = 0;          // Поворот по Y, если «смотрит не туда»
 
     mv.addEventListener('load', () => {
       try {
-        // доступ к сцене модели
-        const m = mv.model;
-        if (m) {
-          m.scale.set(S, S, S);
-          m.rotation.set(0, YAW_DEG * Math.PI / 180, 0);
-          m.position.set(0, 0, 0);
+        // уменьшаем модель
+        if (mv.model) {
+          mv.model.scale.set(START_SCALE, START_SCALE, START_SCALE);
+          mv.model.rotation.set(0, YAW_DEG * Math.PI/180, 0);
         }
       } catch (e) {
-        console.warn('Не удалось применить масштаб/поворот через API model-viewer:', e);
+        console.warn('Scale/rotation set failed:', e);
+      }
+
+      // Если в модели есть анимации — запустим первую
+      try {
+        const clips = mv.availableAnimations || [];
+        if (clips.length) {
+          mv.animationName = clips[0]; // можно выбрать по имени
+          mv.autoplay = true;          // автозапуск анимации
+        }
+      } catch (e) {
+        console.warn('Animation setup failed:', e);
       }
     });
 
-    // Автозапуск AR, если пришли с ?autoplay=1
+    // Автовызов AR при ?autoplay=1 (может потребоваться ручной тап, это ок)
     const qs = new URL(location.href).searchParams;
     if (qs.get('autoplay') === '1') {
-      const tryActivate = () => {
-        if (mv.activateAR) mv.activateAR().catch(()=>{ /* нужен ручной тап — это ок */ });
-      };
-      if (mv.loaded) tryActivate();
-      else mv.addEventListener('load', tryActivate, { once: true });
+      const go = () => mv.activateAR && mv.activateAR().catch(()=>{});
+      if (mv.loaded) go(); else mv.addEventListener('load', go, { once: true });
     }
   </script>
 </body>
