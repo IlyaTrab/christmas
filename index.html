@@ -5,9 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Snow Cam</title>
 
-  <!-- СНЕГ Alaev-Co: CSS + JS -->
+  <!-- СНЕГ Alaev-Co -->
   <link href="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/snow.min.css" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/Snow.min.js"></script>
+
+  <!-- Для попадания снежного слоя в фото -->
+  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Snow Cam">
@@ -17,8 +20,7 @@
     :root{
       --fab-size:56px; --fab-gap:.6rem;
       --glass-bg:rgba(255,255,255,.12); --glass-brd:rgba(255,255,255,.28); --glass-on:rgba(255,255,255,.22);
-      /* поднимем сугробы, чтобы не «уходили» под панель кнопок */
-      --ground-offset: 88px; /* при желании подними/опусти */
+      --ground-offset: 88px; /* высота «земли» (сугробов) — подгони при желании */
     }
 
     html,body{margin:0;height:100%;background:#000;overflow:hidden;}
@@ -28,14 +30,21 @@
     canvas{z-index:2}
     *{-webkit-tap-highlight-color:transparent}
 
-    /* снежные слои библиотеки — над видео/канвасом, но под маскотом/кнопками */
-    .snowflakes-box,.snowball-box{
-      position:fixed !important; inset:auto 0 0 0; z-index:4 !important; pointer-events:none !important;
+    /* Снежные слои библиотеки */
+    .snowflakes-box{
+      position:fixed !important;
+      inset:0 !important;              /* <- стартуют с ВЕРХА */
+      z-index:4 !important;
+      pointer-events:none !important;
     }
-    /* линия «земли» (для сугробов) */
-    .snowball-box{ bottom: var(--ground-offset) !important; }
-
-    /* отключение снега */
+    .snowball-box{
+      position:fixed !important;
+      left:0 !important; right:0 !important;
+      bottom:var(--ground-offset) !important; /* поднимаем «землю» */
+      z-index:4 !important;
+      pointer-events:none !important;
+    }
+    /* выключение снега */
     body.no-snow .snowflakes-box,
     body.no-snow .snowball-box{ display:none !important; }
 
@@ -111,7 +120,6 @@
     </button>
   </div>
 
-  <!-- единственное, что видно до старта -->
   <button id="start" onclick="start()">Запустить камеру</button>
 
 <script>
@@ -137,7 +145,7 @@ const CAPTURE_DPR=DPR;
 
 /* state */
 let running=false, snowEnabled=true, mascotEnabled=true, musicEnabled=true;
-let snowInstance=null; // new Snow(...)
+let snowInstance=null;
 
 /* ===== музыка ===== */
 let bgm=null, audioCtx=null, gain=null;
@@ -183,16 +191,16 @@ async function start(){
 
     resize(); running=true;
 
-    // UI:
+    // UI
     brand.style.display='block';
     controls.style.display='flex';
     mascot.style.display = mascotEnabled ? 'block' : 'none';
 
-    // СНЕГ запускаем только сейчас (после разрешения камеры)
+    // Снег — только после старта камеры
     if(!snowInstance){
       snowInstance = new Snow({
         showSnowflakes: true,
-        showSnowBalls:  true,   // включены сугробы
+        showSnowBalls:  true,
         countSnowflake: 90
       });
     }
@@ -220,7 +228,7 @@ btnMusic.addEventListener('click',async()=>{ musicEnabled=!musicEnabled; updateT
 /* ===== AR ===== */
 btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
 
-/* ===== фото: вместе со снежинками (и сугробами) ===== */
+/* ===== фото: камера + СНЕГ + маскот ===== */
 shotBtn.addEventListener('click', async ()=>{
   flash.classList.add('go'); setTimeout(()=>flash.classList.remove('go'),60);
 
@@ -232,12 +240,13 @@ shotBtn.addEventListener('click', async ()=>{
   // 1) камера
   renderFrame(sctx,{includeMascot:false});
 
-  // 2) дорисуем снежный слой (считываем DOM-координаты)
-  drawSnowOverlayToCanvas(sctx);
+  // 2) снежные слои (через html2canvas; если не получится — фолбэк)
+  await drawSnowOverlayToCanvas(sctx);
 
   // 3) маскот
   renderFrame(sctx,{includeMascot:true});
 
+  // сохранить/поделиться
   const save=(blob)=>{
     const p=n=>String(n).padStart(2,'0'); const ts=new Date();
     const fname=`christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
@@ -252,44 +261,46 @@ shotBtn.addEventListener('click', async ()=>{
   if(shot.toBlob) shot.toBlob(save,'image/png',0.92);
 });
 
-/* Рисуем снежный слой библиотеки в снимок (без html2canvas) */
-function drawSnowOverlayToCanvas(ctx2){
+/* Рисуем снежные слои библиотеки в снимок */
+async function drawSnowOverlayToCanvas(ctx2){
   if (document.body.classList.contains('no-snow')) return;
+
   const rC = canvas.getBoundingClientRect();
+  const opts = { backgroundColor:null, scale: CAPTURE_DPR, logging:false };
 
-  // Падающие снежинки — нарисуем символ ❄ в центре каждого узла
-  const flakeNodes = document.querySelectorAll('.snowflakes-box *');
-  flakeNodes.forEach(el=>{
-    const r = el.getBoundingClientRect();
-    if (!r || (r.width<2 && r.height<2)) return;
-    const cs = getComputedStyle(el);
-    const size = Math.max(parseFloat(cs.fontSize)||0, r.width, r.height);
-    const x = (r.left - rC.left) + r.width/2;
-    const y = (r.top  - rC.top ) + r.height/2;
-    ctx2.save();
-    ctx2.font = `${Math.round(size)}px ${cs.fontFamily || 'Times New Roman, serif'}`;
-    ctx2.fillStyle = cs.color || '#fff';
-    ctx2.textAlign = 'center';
-    ctx2.textBaseline = 'middle';
-    ctx2.fillText('❄', x, y);
-    ctx2.restore();
-  });
+  // Падающие снежинки
+  const flakesBox = document.querySelector('.snowflakes-box');
+  if(flakesBox && window.html2canvas){
+    try{
+      const cv = await html2canvas(flakesBox, opts);
+      ctx2.drawImage(cv, 0, 0, rC.width, rC.height);
+    }catch(e){}
+  } else {
+    // фолбэк: рисуем иконкой ❄ по центрам узлов
+    document.querySelectorAll('.snowflakes-box *').forEach(el=>{
+      const r = el.getBoundingClientRect(); if(!r || (r.width<2 && r.height<2)) return;
+      const cs = getComputedStyle(el); const size = Math.max(parseFloat(cs.fontSize)||0, r.width, r.height);
+      const x=(r.left-rC.left)+r.width/2, y=(r.top-rC.top)+r.height/2;
+      ctx2.save(); ctx2.font=`${Math.round(size)}px ${cs.fontFamily||'Times New Roman, serif'}`;
+      ctx2.fillStyle=cs.color||'#fff'; ctx2.textAlign='center'; ctx2.textBaseline='middle'; ctx2.fillText('❄',x,y); ctx2.restore();
+    });
+  }
 
-  // Сугробы — просто рисуем окружности по их рамкам
-  const snowballs = document.querySelectorAll('.snowball-box *');
-  snowballs.forEach(el=>{
-    const r = el.getBoundingClientRect();
-    if (!r || (r.width<2 && r.height<2)) return;
-    const cs = getComputedStyle(el);
-    const x = (r.left - rC.left) + r.width/2;
-    const y = (r.top  - rC.top ) + r.height/2;
-    const rad = Math.min(r.width, r.height) / 2;
-    ctx2.save();
-    const bg = cs.backgroundColor && cs.backgroundColor!=='rgba(0, 0, 0, 0)' ? cs.backgroundColor : 'rgba(255,255,255,.95)';
-    ctx2.fillStyle = bg;
-    ctx2.beginPath(); ctx2.arc(x, y, rad, 0, Math.PI*2); ctx2.fill();
-    ctx2.restore();
-  });
+  // Сугробы
+  const ballsBox = document.querySelector('.snowball-box');
+  if(ballsBox && window.html2canvas){
+    try{
+      const cv2 = await html2canvas(ballsBox, opts);
+      ctx2.drawImage(cv2, 0, 0, rC.width, rC.height);
+    }catch(e){}
+  } else {
+    document.querySelectorAll('.snowball-box *').forEach(el=>{
+      const r=el.getBoundingClientRect(); if(!r || (r.width<2 && r.height<2)) return;
+      const x=(r.left-rC.left)+r.width/2, y=(r.top-rC.top)+r.height/2, rad=Math.min(r.width,r.height)/2;
+      const bg = getComputedStyle(el).backgroundColor || 'rgba(255,255,255,.95)';
+      ctx2.save(); ctx2.fillStyle=bg; ctx2.beginPath(); ctx2.arc(x,y,rad,0,Math.PI*2); ctx2.fill(); ctx2.restore();
+    });
+  }
 }
 
 /* iOS: открыть фото во вкладке */
