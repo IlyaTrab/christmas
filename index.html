@@ -5,11 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Snow Cam</title>
 
-  <!-- СНЕГ Alaev-Co: CSS -->
+  <!-- СНЕГ Alaev-Co: CSS + JS -->
   <link href="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/snow.min.css" rel="stylesheet">
-
-  <!-- html2canvas для рендера снежного слоя в фото -->
-  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/Snow.min.js"></script>
 
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Snow Cam">
@@ -19,8 +17,8 @@
     :root{
       --fab-size:56px; --fab-gap:.6rem;
       --glass-bg:rgba(255,255,255,.12); --glass-brd:rgba(255,255,255,.28); --glass-on:rgba(255,255,255,.22);
-      /* поднять «землю» сугробов на высоту панели кнопок */
-      --ground-offset: 88px; /* подстрой при желании */
+      /* поднимем сугробы, чтобы не «уходили» под панель кнопок */
+      --ground-offset: 88px; /* при желании подними/опусти */
     }
 
     html,body{margin:0;height:100%;background:#000;overflow:hidden;}
@@ -30,49 +28,57 @@
     canvas{z-index:2}
     *{-webkit-tap-highlight-color:transparent}
 
-    /* снежный слой библиотеки — поверх видео/canvas, но под маскотом/кнопками */
-    .snowflakes-box,
-    .snowball-box{
-      position:fixed !important;
-      z-index:4 !important;
-      pointer-events:none !important;
+    /* снежные слои библиотеки — над видео/канвасом, но под маскотом/кнопками */
+    .snowflakes-box,.snowball-box{
+      position:fixed !important; inset:auto 0 0 0; z-index:4 !important; pointer-events:none !important;
     }
-    /* поднимаем сугробы */
+    /* линия «земли» (для сугробов) */
     .snowball-box{ bottom: var(--ground-offset) !important; }
-    /* выключение снега */
+
+    /* отключение снега */
     body.no-snow .snowflakes-box,
     body.no-snow .snowball-box{ display:none !important; }
 
     /* маскот (снеговик) */
-    #mascot{position:absolute;left:1rem;bottom:4.8rem;z-index:5;display:none;
-      width:34%;max-width:400px;touch-action:none;user-select:none;cursor:grab;
-      --tx:0px;--ty:0px;--s:1;transform:translate(var(--tx),var(--ty)) scale(var(--s));transform-origin:center center;}
+    #mascot{
+      position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
+      width:34%; max-width:400px; touch-action:none; user-select:none; cursor:grab;
+      --tx:0px; --ty:0px; --s:1; transform:translate(var(--tx),var(--ty)) scale(var(--s)); transform-origin:center center;
+    }
     #mascot.dragging{cursor:grabbing;}
     #mascot img{display:block;width:100%;height:auto;pointer-events:none}
 
-    /* бренд и панель — скрыты до старта */
-    #brand{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);
+    /* бренд и панель (скрыты до старта) */
+    #brand{
+      position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
       font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:#fff;letter-spacing:.5px;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.6);
-      z-index:6;user-select:none;pointer-events:none;display:none;}
-    #controls{position:fixed;bottom:.9rem;z-index:7;left:50%;transform:translateX(-50%);gap:var(--fab-gap);display:none;}
+      color:#fff; letter-spacing:.5px; opacity:.9; text-shadow:0 1px 2px rgba(0,0,0,.6);
+      z-index:6; user-select:none; pointer-events:none; display:none;
+    }
+    #controls{position:fixed; bottom:.9rem; z-index:7; left:50%; transform:translateX(-50%); gap:var(--fab-gap); display:none;}
 
     /* кнопки */
-    .fab{position:relative;width:var(--fab-size);height:var(--fab-size);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-      background:var(--glass-bg);border:1px solid var(--glass-brd);backdrop-filter:blur(10px);color:rgba(255,255,255,.78);
-      box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.06);
-      outline:none;cursor:pointer;transition:transform .12s ease,background .15s ease,color .15s ease,box-shadow .15s ease,filter .15s ease;}
+    .fab{
+      position:relative; width:var(--fab-size); height:var(--fab-size); border-radius:999px;
+      display:inline-flex; align-items:center; justify-content:center;
+      background:var(--glass-bg); border:1px solid var(--glass-brd); backdrop-filter:blur(10px);
+      color:rgba(255,255,255,.78);
+      box-shadow:0 6px 18px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+      outline:none; cursor:pointer;
+      transition:transform .12s ease, background .15s ease, color .15s ease, box-shadow .15s ease, filter .15s ease;
+    }
     .fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
     .fab:active{transform:scale(.96)}
-    .fab.is-on{background:var(--glass-on);color:#fff;box-shadow:0 8px 22px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.12) inset}
+    .fab.is-on{background:var(--glass-on); color:#fff; box-shadow:0 8px 22px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.12) inset}
     .fab:hover{filter:brightness(1.08)}
-    .fab:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px}
-    #shotBtn{border:1px solid rgba(255,255,255,.35);color:#fff;background:linear-gradient(to bottom,rgba(255,255,255,.18),rgba(255,255,255,.10))}
+    .fab:focus-visible{outline:2px solid rgba(255,255,255,.6); outline-offset:2px}
+    #shotBtn{border:1px solid rgba(255,255,255,.35); color:#fff; background:linear-gradient(to bottom,rgba(255,255,255,.18),rgba(255,255,255,.10))}
 
     /* вспышка и старт */
-    #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;transition:opacity .45s ease}
+    #flash{position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:8; transition:opacity .45s ease}
     #flash.go{opacity:.9}
-    #start{position:fixed;left:1rem;right:1rem;bottom:1.2rem;z-index:7;padding:.9rem 1.1rem;font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;border-radius:.75rem;border:0;background:#fff;cursor:pointer}
+    #start{position:fixed; left:1rem; right:1rem; bottom:1.2rem; z-index:7; padding:.9rem 1.1rem;
+      font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; border-radius:.75rem; border:0; background:#fff; cursor:pointer}
 
     @media (max-width:380px){ :root{ --ground-offset:76px; } }
   </style>
@@ -107,9 +113,6 @@
 
   <!-- единственное, что видно до старта -->
   <button id="start" onclick="start()">Запустить камеру</button>
-
-  <!-- СНЕГ Alaev-Co: JS (инициализируем ПОСЛЕ старта камеры) -->
-  <script src="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/Snow.min.js"></script>
 
 <script>
 'use strict';
@@ -162,7 +165,6 @@ function renderFrame(targetCtx,{includeMascot=false}={}){
     try{ targetCtx.drawImage(mascotImg,mx,my,mw,mh);}catch(_){}
   }
 }
-
 function loop(){ if(!running) return; ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); renderFrame(ctx,{includeMascot:false}); requestAnimationFrame(loop); }
 
 /* ===== старт ===== */
@@ -181,7 +183,7 @@ async function start(){
 
     resize(); running=true;
 
-    // Показываем UI
+    // UI:
     brand.style.display='block';
     controls.style.display='flex';
     mascot.style.display = mascotEnabled ? 'block' : 'none';
@@ -227,16 +229,15 @@ shotBtn.addEventListener('click', async ()=>{
   shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
   const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
 
-  // 1) камера + вуаль
+  // 1) камера
   renderFrame(sctx,{includeMascot:false});
 
-  // 2) дорисуем снежный слой с помощью html2canvas (падающий и сугробы)
-  await drawSnowOverlayToCanvas(sctx);
+  // 2) дорисуем снежный слой (считываем DOM-координаты)
+  drawSnowOverlayToCanvas(sctx);
 
   // 3) маскот
   renderFrame(sctx,{includeMascot:true});
 
-  // 4) сохранить/поделиться
   const save=(blob)=>{
     const p=n=>String(n).padStart(2,'0'); const ts=new Date();
     const fname=`christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
@@ -251,29 +252,47 @@ shotBtn.addEventListener('click', async ()=>{
   if(shot.toBlob) shot.toBlob(save,'image/png',0.92);
 });
 
-// Рендерим снежинки библиотеки (оба слоя) в снимок
-async function drawSnowOverlayToCanvas(targetCtx){
+/* Рисуем снежный слой библиотеки в снимок (без html2canvas) */
+function drawSnowOverlayToCanvas(ctx2){
   if (document.body.classList.contains('no-snow')) return;
   const rC = canvas.getBoundingClientRect();
-  const opts = { backgroundColor: null, scale: CAPTURE_DPR, logging: false };
 
-  const flakes = document.querySelector('.snowflakes-box');
-  if (flakes && window.html2canvas){
-    try{
-      const c1 = await html2canvas(flakes, opts);
-      targetCtx.drawImage(c1, 0, 0, rC.width, rC.height);
-    }catch(e){}
-  }
-  const balls = document.querySelector('.snowball-box');
-  if (balls && window.html2canvas){
-    try{
-      const c2 = await html2canvas(balls, opts);
-      targetCtx.drawImage(c2, 0, 0, rC.width, rC.height);
-    }catch(e){}
-  }
+  // Падающие снежинки — нарисуем символ ❄ в центре каждого узла
+  const flakeNodes = document.querySelectorAll('.snowflakes-box *');
+  flakeNodes.forEach(el=>{
+    const r = el.getBoundingClientRect();
+    if (!r || (r.width<2 && r.height<2)) return;
+    const cs = getComputedStyle(el);
+    const size = Math.max(parseFloat(cs.fontSize)||0, r.width, r.height);
+    const x = (r.left - rC.left) + r.width/2;
+    const y = (r.top  - rC.top ) + r.height/2;
+    ctx2.save();
+    ctx2.font = `${Math.round(size)}px ${cs.fontFamily || 'Times New Roman, serif'}`;
+    ctx2.fillStyle = cs.color || '#fff';
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'middle';
+    ctx2.fillText('❄', x, y);
+    ctx2.restore();
+  });
+
+  // Сугробы — просто рисуем окружности по их рамкам
+  const snowballs = document.querySelectorAll('.snowball-box *');
+  snowballs.forEach(el=>{
+    const r = el.getBoundingClientRect();
+    if (!r || (r.width<2 && r.height<2)) return;
+    const cs = getComputedStyle(el);
+    const x = (r.left - rC.left) + r.width/2;
+    const y = (r.top  - rC.top ) + r.height/2;
+    const rad = Math.min(r.width, r.height) / 2;
+    ctx2.save();
+    const bg = cs.backgroundColor && cs.backgroundColor!=='rgba(0, 0, 0, 0)' ? cs.backgroundColor : 'rgba(255,255,255,.95)';
+    ctx2.fillStyle = bg;
+    ctx2.beginPath(); ctx2.arc(x, y, rad, 0, Math.PI*2); ctx2.fill();
+    ctx2.restore();
+  });
 }
 
-// iOS: открыть фото во вкладке
+/* iOS: открыть фото во вкладке */
 function openInNewTabAsImage(blob){
   const r=new FileReader();
   r.onload=()=>{
@@ -308,10 +327,10 @@ mascot.addEventListener('pointermove',e=>{
   e.preventDefault(); pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
   const n=pointers.size; const {tx,ty,s}=getTransform();
   if(n===1 && dragId!==null){
-    const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-драгStartY;
+    const cur=pointers.get(dragId); const dx=cur.x-dragStartX; const dy=cur.y-dragStartY;
     setTransform(startTx+dx,startTy+dy,s);
   }else if(n===2){
-    const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-п1.x,p2.y-п1.y)||1;
+    const [p1,p2]=Array.from(pointers.values()); const dist=Math.hypot(p2.x-p1.x,p2.y-p1.y)||1;
     const scale=clamp(startScale*(dist/startDist),0.2,5); setTransform(tx,ty,scale);
   }
 },{passive:false});
@@ -326,6 +345,9 @@ function endPointer(e){
 mascot.addEventListener('pointerup',endPointer,{passive:false});
 mascot.addEventListener('pointercancel',endPointer,{passive:false});
 mascot.addEventListener('pointerleave',endPointer,{passive:false});
+
+/* AR */
+btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
 </script>
 </body>
 </html>
