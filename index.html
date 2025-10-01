@@ -1,97 +1,77 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>Snow Cam</title>
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Snow Cam">
-<meta name="theme-color" content="#000000">
-<style>
-  :root{
-    --fab-size:56px; --fab-gap:.6rem;
-    --glass-bg:rgba(255,255,255,.12); --glass-brd:rgba(255,255,255,.28); --glass-on:rgba(255,255,255,.22);
-  }
-  html,body{margin:0;height:100%;background:#000;overflow:hidden;}
-  #wrap{position:fixed;inset:0}
-  video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  video{z-index:1}
-  canvas{z-index:2}
-  *{-webkit-tap-highlight-color:transparent}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Snow Cam</title>
 
-  /* слой со «снежинками-символами» */
-  #snowLayer{
-    position:fixed; inset:0; z-index:3; pointer-events:none; user-select:none; display:none;
-    font-family: Times, "Times New Roman", serif; /* базовый шрифт как в примере */
-    will-change: transform;
-  }
-  .flake{
-    position:absolute; top:0; left:0; transform:translate3d(0, -100px, 0);
-    line-height:1; filter: drop-shadow(0 1px 0 rgba(0,0,0,.15));
-  }
+  <!-- СНЕГ Alaev-Co (CSS) -->
+  <link href="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/snow.min.css" rel="stylesheet">
+  <!-- Прочее -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Snow Cam">
+  <meta name="theme-color" content="#000000">
 
-  /* маскот (снеговик) сверху над снегом */
-  #mascot{position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
-    width:34%; max-width:400px; touch-action:none; user-select:none; cursor:grab;
-    --tx:0px; --ty:0px; --s:1; transform:translate(var(--tx),var(--ty)) scale(var(--s)); transform-origin:center center;}
-  #mascot.dragging{cursor:grabbing;}
-  #mascot img{display:block;width:100%;height:auto;pointer-events:none}
+  <style>
+    :root{--fab-size:56px;--fab-gap:.6rem;--glass-bg:rgba(255,255,255,.12);--glass-brd:rgba(255,255,255,.28);--glass-on:rgba(255,255,255,.22);}
+    html,body{margin:0;height:100%;background:#000;overflow:hidden;}
+    #wrap{position:fixed;inset:0}
+    video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    video{z-index:1}
+    canvas{z-index:2}
+    /* слой со снежинками библиотеки будет поверх видео/канваса */
+    /* и мы будем им просто управлять видимостью */
+    body.no-snow .snowflakes-box,
+    body.no-snow .snowball-box{display:none !important;}
 
-  /* панель и бренд (скрыты до старта) */
-  #brand{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);
-    font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#fff;letter-spacing:.5px;opacity:.9;
-    text-shadow:0 1px 2px rgba(0,0,0,.6); z-index:6; user-select:none; pointer-events:none; display:none;}
-  #controls{position:fixed;bottom:.9rem;z-index:7;left:50%;transform:translateX(-50%);gap:.6rem; display:none;}
+    /* маскот (снеговик) */
+    #mascot{position:absolute;left:1rem;bottom:4.8rem;z-index:5;display:none;width:34%;max-width:400px;touch-action:none;user-select:none;cursor:grab;
+      --tx:0px;--ty:0px;--s:1;transform:translate(var(--tx),var(--ty)) scale(var(--s));transform-origin:center center;}
+    #mascot.dragging{cursor:grabbing;}
+    #mascot img{display:block;width:100%;height:auto;pointer-events:none}
 
-  /* кнопки */
-  .fab{position:relative;width:var(--fab-size);height:var(--fab-size);border-radius:999px;
-    display:inline-flex;align-items:center;justify-content:center;
-    background:var(--glass-bg);border:1px solid var(--glass-brd);backdrop-filter:blur(10px);
-    color:rgba(255,255,255,.78);box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.06);
-    outline:none;cursor:pointer;transition:transform .12s ease,background .15s ease,color .15s ease,box-shadow .15s ease,filter .15s ease;}
-  .fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
-  .fab:active{transform:scale(.96)}
-  .fab.is-on{background:var(--glass-on);color:#fff;box-shadow:0 8px 22px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.12) inset}
-  .fab:hover{filter:brightness(1.08)}
-  .fab:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px}
-  #shotBtn{border:1px solid rgba(255,255,255,.35);color:#fff;background:linear-gradient(to bottom,rgba(255,255,255,.18),rgba(255,255,255,.10))}
+    /* бренд и панель — скрыты до старта */
+    #brand{position:fixed;top:.8rem;left:50%;transform:translateX(-50%);font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#fff;letter-spacing:.5px;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.6);z-index:6;user-select:none;pointer-events:none;display:none;}
+    #controls{position:fixed;bottom:.9rem;z-index:7;left:50%;transform:translateX(-50%);gap:var(--fab-gap);display:none;}
 
-  /* flash при фото и единственная кнопка до старта */
-  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;transition:opacity .45s ease}
-  #flash.go{opacity:.9}
-  #start{position:fixed;left:1rem;right:1rem;bottom:1.2rem;z-index:7;padding:.9rem 1.1rem;
-    font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;border-radius:.75rem;border:0;background:#fff;cursor:pointer}
-</style>
+    /* кнопки */
+    .fab{position:relative;width:var(--fab-size);height:var(--fab-size);border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:var(--glass-bg);border:1px solid var(--glass-brd);backdrop-filter:blur(10px);color:rgba(255,255,255,.78);box-shadow:0 6px 18px rgba(0,0,0,.35),inset 0 0 0 1px rgba(255,255,255,.06);outline:none;cursor:pointer;transition:transform .12s ease,background .15s ease,color .15s ease,box-shadow .15s ease,filter .15s ease;}
+    .fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+    .fab:active{transform:scale(.96)}
+    .fab.is-on{background:var(--glass-on);color:#fff;box-shadow:0 8px 22px rgba(0,0,0,.45),0 0 0 2px rgba(255,255,255,.12) inset}
+    .fab:hover{filter:brightness(1.08)}
+    .fab:focus-visible{outline:2px solid rgba(255,255,255,.6);outline-offset:2px}
+    #shotBtn{border:1px solid rgba(255,255,255,.35);color:#fff;background:linear-gradient(to bottom,rgba(255,255,255,.18),rgba(255,255,255,.10))}
+
+    /* вспышка и старт */
+    #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;transition:opacity .45s ease}
+    #flash.go{opacity:.9}
+    #start{position:fixed;left:1rem;right:1rem;bottom:1.2rem;z-index:7;padding:.9rem 1.1rem;font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;border-radius:.75rem;border:0;background:#fff;cursor:pointer}
+  </style>
 </head>
 <body>
   <div id="wrap">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
-    <div id="snowLayer" aria-hidden="true"></div>
-    <div id="mascot"><img id="mascotImg" src="assets/snowmann.gif" alt="Snowman" draggable="false"></div>
+    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
   <div id="flash"></div>
   <div id="brand">christmas-spb.ru</div>
 
   <div id="controls" aria-label="Управление">
-    <!-- ❄️ Снег -->
     <button id="btnSnow" class="fab is-on" type="button" aria-pressed="true" title="Снег">
       <svg viewBox="0 0 24 24"><path d="M12 2v20M12 12L21 7M12 12L3 7M12 12l9 5M12 12L3 17M2 12h20M7 4l3 1.8M17 4l-3 1.8M7 20l3-1.8M17 20l-3-1.8"/></svg>
     </button>
-    <!-- ⛄ Снеговик -->
     <button id="btnMascot" class="fab is-on" type="button" aria-pressed="true" title="Снеговик">
       <svg viewBox="0 0 24 24"><g transform="translate(0.5 0.5)"><circle cx="12" cy="15.5" r="5"/><circle cx="12" cy="8" r="3.2"/><path d="M6.2 12.5L4 11M17.8 12.5L20 11"/><path d="M9.4 6.6h5.2M9 6l6-.6"/></g></svg>
     </button>
-    <!-- 🎵 Музыка -->
     <button id="btnMusic" class="fab is-on" type="button" aria-pressed="true" title="Музыка">
       <svg viewBox="0 0 24 24"><path d="M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M9 12V5l10-2v7"/></svg>
     </button>
-    <!-- 🧊 AR -->
-    <button id="btnAR" class="fab" type="button" aria-label="Открыть в AR" title="AR">
+    <button id="btnAR" class="fab" type="button" title="AR">
       <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7l9-5z"/><path d="M12 2v20M3 7l9 5 9-5"/></svg>
     </button>
-    <!-- 📷 Фото -->
     <button id="shotBtn" class="fab" type="button" title="Сделать фото">
       <svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="14" r="3.2"/></svg>
     </button>
@@ -99,6 +79,9 @@
 
   <!-- единственное, что видно до старта -->
   <button id="start" onclick="start()">Запустить камеру</button>
+
+  <!-- СНЕГ Alaev-Co (JS) -->
+  <script src="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/Snow.min.js"></script>
 
 <script>
 'use strict';
@@ -117,15 +100,15 @@ const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d',{alpha:true});
 const mascot=document.getElementById('mascot');
 const mascotImg=document.getElementById('mascotImg');
-const snowLayer=document.getElementById('snowLayer');
 
 const DPR=Math.min(window.devicePixelRatio||1,2);
 const CAPTURE_DPR=DPR;
 
 /* state */
 let running=false, snowEnabled=true, mascotEnabled=true, musicEnabled=true;
+let snowInstance=null; // Alaev Snow()
 
-/* ======= музыка ======= */
+/* ===== музыка ===== */
 let bgm=null, audioCtx=null, gain=null;
 function initAudio(){ if(bgm) return; bgm=new Audio(); bgm.loop=true; bgm.preload='auto'; bgm.src='assets/song.mp3';
   const AC=window.AudioContext||window.webkitAudioContext;
@@ -137,107 +120,14 @@ function stopMusic(){ fadeTo(0.0,0.4); setTimeout(()=>{try{bgm.pause();}catch(_)
 function fadeTo(target,dur){ if(gain&&audioCtx){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(target, now+dur); }
   else if(bgm){ const from=bgm.volume, steps=Math.max(1,Math.floor(dur*30)); let i=0; const t=setInterval(()=>{ i++; bgm.volume=from+(target-from)*i/steps; if(i>=steps) clearInterval(t); },33);} }
 
-/* ======= DOM снег по образцу ======= */
-/* Настройки (как в примере) */
-let snowmax=40;
-let snowcolor=["#b9dff5","#7fc7ff","#7fb1ff","#7fc7ff","#b9dff5"];
-let snowtype=["Times"];
-let snowletter="❄";        // \u2744
-let sinkspeed=0.4;
-let snowmaxsize=40;
-let snowminsize=10;
-let snowingzone=1;
-
-const flakes=[]; // {el,size,color,sink,posx,posy,amp,phase,omega,cx,cy}
-let viewW=0, viewH=0;
-
-function rand(n){ return Math.floor(Math.random()*n); }
-function measureViewport(){ viewW = snowLayer.clientWidth; viewH = snowLayer.clientHeight; }
-
-function pickStartX(size){
-  if(snowingzone===2) return rand(viewW/2 - size);
-  if(snowingzone===3) return rand(viewW/2 - size) + viewW/4;
-  if(snowingzone===4) return rand(viewW/2 - size) + viewW/2;
-  return rand(viewW - size);
-}
-
-function initDomSnow(){
-  snowLayer.innerHTML='';
-  flakes.length=0;
-  measureViewport();
-  const count = snowmax;
-
-  for(let i=0;i<=count;i++){
-    const size = rand(snowmaxsize - snowminsize + 1) + snowminsize;
-    const color = snowcolor[rand(snowcolor.length)];
-    const el = document.createElement('span');
-    el.className='flake';
-    el.textContent = snowletter;
-    el.style.fontFamily = snowtype[rand(snowtype.length)];
-    el.style.fontSize = size+'px';
-    el.style.color = color;
-    el.style.zIndex = 1000; // поверх видео/канваса, но слой уже выше
-
-    // физика
-    const amp = Math.random()*15;        // амплитуда качания
-    const omega = 0.03 + Math.random()/10; // скорость фазы
-    const phase = Math.random()*Math.PI*2;
-    const sink = sinkspeed * size/5;       // как в примере
-
-    const posx = pickStartX(size);
-    const posy = rand(Math.max(0, viewH - 2*size));
-
-    snowLayer.appendChild(el);
-    flakes.push({el,size,color,sink,posx,posy,amp,phase,omega,cx:posx,cy:posy});
-  }
-  snowLayer.style.display = snowEnabled ? 'block' : 'none';
-}
-
-function stepDomSnow(){
-  if(!snowEnabled || !running) return;
-  // обновим размеры (на всякий случай при повороте экрана)
-  const w = snowLayer.clientWidth, h = snowLayer.clientHeight;
-  if(w!==viewW || h!==viewH){ viewW=w; viewH=h; }
-
-  for(const f of flakes){
-    f.phase += f.omega;
-    f.cy += f.sink;
-    const x = f.posx + f.amp*Math.sin(f.phase);
-
-    // сброс
-    if(f.cy >= viewH - 2*f.size || x > (viewW - 3*f.amp)){
-      f.posx = pickStartX(f.size);
-      f.cy = -f.size; // сверху
-    }
-
-    f.cx = x;
-    f.el.style.transform = `translate3d(${f.cx}px, ${f.cy}px, 0)`;
-  }
-}
-
-// рисуем DOM-снег в снимок (тот же стейт: f.cx,f.cy,f.size,f.color)
-function drawDomSnowToCanvas(targetCtx){
-  if(!snowEnabled) return;
-  targetCtx.save();
-  targetCtx.textBaseline='alphabetic'; // нормальная посадка символа
-  for(const f of flakes){
-    targetCtx.font = `${f.size}px ${snowtype[0] || 'Times'}`;
-    targetCtx.fillStyle = f.color;
-    targetCtx.fillText(snowletter, f.cx, f.cy + f.size); // +size = грубая компенсация базовой линии
-  }
-  targetCtx.restore();
-}
-
-/* ======= визуальный цикл ======= */
+/* ===== визуал ===== */
 function resize(){ canvas.width=Math.floor(canvas.clientWidth*DPR); canvas.height=Math.floor(canvas.clientHeight*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
-window.addEventListener('resize', ()=>{ resize(); measureViewport(); });
+window.addEventListener('resize', resize);
 
 function renderFrame(targetCtx,{includeMascot=false}={}){
   const W=canvas.clientWidth,H=canvas.clientHeight;
   try{ targetCtx.drawImage(video,0,0,W,H);}catch(_){}
-  // лёгкая «вуаль»
   targetCtx.fillStyle='rgba(255,255,255,.015)'; targetCtx.fillRect(0,0,W,H);
-
   if(includeMascot && mascotEnabled && mascotImg.complete){
     const rC=canvas.getBoundingClientRect(), rM=mascot.getBoundingClientRect();
     const mx=(rM.left-rC.left), my=(rM.top-rC.top), mw=rM.width, mh=rM.height;
@@ -245,19 +135,9 @@ function renderFrame(targetCtx,{includeMascot=false}={}){
   }
 }
 
-function loop(){
-  if(!running) return;
-  // фон/камера в канвас (без бренда)
-  ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
-  renderFrame(ctx,{includeMascot:false});
+function loop(){ if(!running) return; ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); renderFrame(ctx,{includeMascot:false}); requestAnimationFrame(loop); }
 
-  // обновляем DOM-снег (через transform)
-  stepDomSnow();
-
-  requestAnimationFrame(loop);
-}
-
-/* ======= старт ======= */
+/* ===== старт ===== */
 async function start(){
   try{
     let stream;
@@ -267,35 +147,40 @@ async function start(){
       if(e && (e.name==='AbortError'||/aborted/i.test(e.message||''))){ await new Promise(r=>setTimeout(r,300)); stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false}); }
       else throw e;
     }
-    // iOS-френдли play
     video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.muted=true;
     video.srcObject=stream;
     try{ await video.play(); }catch(_){ await new Promise(r=>setTimeout(r,120)); await video.play(); }
 
     resize(); running=true;
 
-    // показываем всё только после старта
+    // Показываем UI
     brand.style.display='block';
     controls.style.display='flex';
     mascot.style.display = mascotEnabled ? 'block' : 'none';
 
-    // запускаем DOM-снег
-    initDomSnow();
+    // СНЕГ запускаем только сейчас (после разрешения камеры)
+    if(!snowInstance){
+      // Можно настроить параметры скрипта (кол-во и т.п.)
+      snowInstance = new Snow({
+        showSnowflakes: true,
+        showSnowBalls: false,     // сугробы отключил, чтоб не перекрывали
+        countSnowflake: 90        // подогнать под вкус
+      });
+    }
 
     if(startBtn) startBtn.remove();
     requestAnimationFrame(loop);
-
     if(musicEnabled) startMusic();
   }catch(e){ alert('Не удалось открыть камеру: '+e.message); }
 }
 startBtn.addEventListener('click', start);
 
-/* ======= тумблеры ======= */
+/* ===== тумблеры ===== */
 function updateTogglesUI(){
   btnSnow.classList.toggle('is-on',snowEnabled);  btnSnow.setAttribute('aria-pressed',String(snowEnabled));
   btnMascot.classList.toggle('is-on',mascotEnabled); btnMascot.setAttribute('aria-pressed',String(mascotEnabled));
   btnMusic.classList.toggle('is-on',musicEnabled); btnMusic.setAttribute('aria-pressed',String(musicEnabled));
-  snowLayer.style.display = running && snowEnabled ? 'block' : 'none';
+  document.body.classList.toggle('no-snow', !snowEnabled);
   mascot.style.display = running && mascotEnabled ? 'block' : 'none';
   if(navigator.vibrate) navigator.vibrate(8);
 }
@@ -303,21 +188,28 @@ btnSnow.addEventListener('click',()=>{ snowEnabled=!snowEnabled; updateTogglesUI
 btnMascot.addEventListener('click',()=>{ mascotEnabled=!mascotEnabled; updateTogglesUI(); });
 btnMusic.addEventListener('click',async()=>{ musicEnabled=!musicEnabled; updateTogglesUI(); if(musicEnabled) await startMusic(); else stopMusic(); });
 
-/* ======= AR кнопка ======= */
+/* ===== AR ===== */
 btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
 
-/* ======= снимок (включая DOM-снег) ======= */
+/* ===== фото (включая снежинки библиотеки) ===== */
 shotBtn.addEventListener('click',()=>{
   flash.classList.add('go'); setTimeout(()=>flash.classList.remove('go'),60);
+
   const W=canvas.clientWidth,H=canvas.clientHeight;
-  const shot=document.createElement('canvas'); shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
+  const shot=document.createElement('canvas');
+  shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
   const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
 
-  // рисуем видео + вуаль + СНЕГ + маскот
+  // 1) видео+вуаль
   renderFrame(sctx,{includeMascot:false});
-  drawDomSnowToCanvas(sctx);              // <- снежинки в фото
-  renderFrame(sctx,{includeMascot:true}); // <- поверх (маскот)
 
+  // 2) дорисовываем снежинки из DOM (библиотека Alaev-Co)
+  drawAlaevSnowToCanvas(sctx);
+
+  // 3) маскот
+  renderFrame(sctx,{includeMascot:true});
+
+  // сохранить/поделиться
   const save=(blob)=>{
     const p=n=>String(n).padStart(2,'0'); const ts=new Date();
     const fname=`christmas-spb_${ts.getFullYear()}-${p(ts.getMonth()+1)}-${p(ts.getDate())}_${p(ts.getHours())}-${p(ts.getMinutes())}-${p(ts.getSeconds())}.png`;
@@ -331,6 +223,36 @@ shotBtn.addEventListener('click',()=>{
   };
   if(shot.toBlob) shot.toBlob(save,'image/png',0.92);
 });
+
+/* Снимаем положение снежинок из DOM и рисуем их как символы ❄ */
+function drawAlaevSnowToCanvas(targetCtx){
+  if(!snowEnabled) return;
+  const rC = canvas.getBoundingClientRect();
+  // контейнеры либы
+  const boxes = document.querySelectorAll('.snowflakes-box');
+  boxes.forEach(box=>{
+    // большинство снежинок — непосредственные дети
+    const nodes = box.querySelectorAll('*');
+    nodes.forEach(el=>{
+      const rect = el.getBoundingClientRect();
+      if(!rect || (rect.width<2 && rect.height<2)) return;
+      const cs = getComputedStyle(el);
+      const size = Math.max(parseFloat(cs.fontSize)||0, rect.height, rect.width);
+      const color = cs.color || 'rgba(255,255,255,.9)';
+      const x = rect.left - rC.left + rect.width/2;
+      const y = rect.top  - rC.top  + rect.height/2;
+      targetCtx.save();
+      targetCtx.font = `${Math.round(size)}px ${cs.fontFamily||'Times New Roman, serif'}`;
+      targetCtx.fillStyle = color;
+      targetCtx.textAlign = 'center';
+      targetCtx.textBaseline = 'middle';
+      targetCtx.fillText('❄', x, y);
+      targetCtx.restore();
+    });
+  });
+}
+
+/* open image in new tab (iOS) */
 function openInNewTabAsImage(blob){
   const r=new FileReader();
   r.onload=()=>{
@@ -344,7 +266,7 @@ function openInNewTabAsImage(blob){
   r.readAsDataURL(blob);
 }
 
-/* ======= перетаскивание/масштаб маскота ======= */
+/* перетаскивание/пинч маскота */
 const pointers=new Map(); let dragId=null, dragStartX=0, dragStartY=0, startTx=0, startTy=0, startScale=1, startDist=0;
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function getTransform(){ const st=getComputedStyle(mascot); return {tx:parseFloat(st.getPropertyValue('--tx'))||0,ty:parseFloat(st.getPropertyValue('--ty'))||0,s:parseFloat(st.getPropertyValue('--s'))||1}; }
@@ -382,9 +304,6 @@ function endPointer(e){
 mascot.addEventListener('pointerup',endPointer,{passive:false});
 mascot.addEventListener('pointercancel',endPointer,{passive:false});
 mascot.addEventListener('pointerleave',endPointer,{passive:false});
-
-/* ======= AR ======= */
-btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
 </script>
 </body>
 </html>
