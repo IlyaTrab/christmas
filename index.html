@@ -72,7 +72,7 @@
   <div id="wrap">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
-    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
+    <div id="mascot"><img id="mascotImg" src="assets/snowwman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
   <div id="flash"></div>
@@ -157,25 +157,25 @@ function makeFlakeSprite(size){
 function buildSprites(){ sprites=[16,14,12,10].map(makeFlakeSprite); }
 
 function initField(){
-  const W=canvas.clientWidth, H=canvas.clientHeight;
+  const H=canvas.clientHeight;
   const offset = cssPx('--ground-offset', 88);
   groundY = H - offset;
-  binW = 4; bins = Math.ceil(W/binW);
+  binW = 4; bins = Math.ceil(canvas.clientWidth/binW);
   heightmap = new Array(bins).fill(0);
 }
 
 function spawnFlakes(){
   const area=canvas.clientWidth*canvas.clientHeight;
-  const n = Math.max(140, Math.min(360, Math.floor(area/8000))); // гуще, заметно
+  const n = Math.max(140, Math.min(360, Math.floor(area/8000)));
   const H=canvas.clientHeight;
   flakes = new Array(n).fill(0).map(()=>({
     x: Math.random()*canvas.clientWidth,
     y: -Math.random()*H,
-    r: 1.5 + Math.random()*2.8,           // радиус пикселей
-    vy: 90 + Math.random()*120,           // px/сек — падение
-    swayA: 30 + Math.random()*35,         // амплитуда колебаний по X
+    r: 1.5 + Math.random()*2.8,
+    vy: 90 + Math.random()*120,
+    swayA: 30 + Math.random()*35,
     theta: Math.random()*Math.PI*2,
-    swaySpeed: 1.2 + Math.random()*1.6,   // рад/сек
+    swaySpeed: 1.2 + Math.random()*1.6,
     sprite: sprites[(Math.random()*sprites.length)|0]
   }));
 }
@@ -203,19 +203,16 @@ function updateSnow(dt){
 
   for(const f of flakes){
     f.theta += f.swaySpeed * dt;
-    const vx = Math.sin(f.theta) * f.swayA;   // px/сек
+    const vx = Math.sin(f.theta) * f.swayA;
     f.y += f.vy * dt;
     f.x += vx * dt;
 
-    // зацикливание по X
     if(f.x < -8) f.x = canvas.clientWidth+8;
     if(f.x > canvas.clientWidth+8) f.x = -8;
 
-    // приземление
     const yTop = fieldYAt(f.x);
     if(f.y + f.r >= yTop){
-      addSnowAt(f.x, 4.0 + f.r*2.2);   // щедрее — сугробы растут заметно
-      // перерождение
+      addSnowAt(f.x, 4.0 + f.r*2.2);
       f.x = Math.random()*canvas.clientWidth;
       f.y = -10 - Math.random()*canvas.clientHeight*0.4;
       f.theta = Math.random()*Math.PI*2;
@@ -225,30 +222,23 @@ function updateSnow(dt){
   // частицы «спрея»
   for(let i=spray.length-1;i>=0;i--){
     const p=spray[i];
-    p.vy += 1200*dt;                 // гравитация px/сек^2
+    p.vy += 1200*dt;
     p.x  += p.vx*dt; p.y += p.vy*dt;
     p.life -= dt;
     if(p.y >= fieldYAt(p.x)){ addSnowAt(p.x, 0.9); spray.splice(i,1); continue; }
     if(p.life<=0) spray.splice(i,1);
   }
 
-  // мягкое сглаживание сугроба
+  // сглаживание сугроба
   for(let i=1;i<bins-1;i++){
     const avg = (heightmap[i-1]+heightmap[i]+heightmap[i+1])/3;
     heightmap[i] = heightmap[i]*0.95 + avg*0.05;
   }
 }
 
-function drawSnow(targetCtx){
+/* ---- РАЗДЕЛИЛ отрисовку: сугробы / плуг / снежинки ---- */
+function drawDrifts(targetCtx){
   if(!snowEnabled) return;
-
-  // падающие снежинки
-  for(const f of flakes){
-    const s=f.sprite, size=f.r*2;
-    targetCtx.drawImage(s, f.x - f.r, f.y - f.r, size, size);
-  }
-
-  // сугробы — белый мягкий силуэт
   const W=canvas.clientWidth, H=canvas.clientHeight;
   targetCtx.save();
   const grad = targetCtx.createLinearGradient(0, groundY-80, 0, groundY+10);
@@ -267,8 +257,16 @@ function drawSnow(targetCtx){
   targetCtx.lineTo(W, H);
   targetCtx.closePath();
   targetCtx.fill();
-
-  // искры от плуга
+  targetCtx.restore();
+}
+function drawFlakes(targetCtx){
+  if(!snowEnabled) return;
+  for(const f of flakes){
+    const s=f.sprite, size=f.r*2;
+    targetCtx.drawImage(s, f.x - f.r, f.y - f.r, size, size);
+  }
+}
+function drawSpray(targetCtx){
   for(const p of spray){
     targetCtx.globalAlpha = Math.max(0, p.life/p.maxLife);
     targetCtx.beginPath();
@@ -277,23 +275,19 @@ function drawSnow(targetCtx){
     targetCtx.fill();
   }
   targetCtx.globalAlpha = 1;
-  targetCtx.restore();
 }
 
 /* ========== НОВОГОДНИЙ СНЕГООЧИСТИТЕЛЬ ========== */
 const plow = {
-  active:false, auto:true, // авто-проезд каждые 20с
-  x:-200, dir:1, speed: 260, // px/сек
-  width: 160, height: 56,
-  blade: 120,
-  color1:'#c62828', // корпус
-  color2:'#ffcc00', // отвал
-  lightsN: 8
+  active:false, auto:true,
+  x:-220, dir:1, speed: 280, // px/сек
+  width: 180, height: 62,
+  blade: 130,
+  lightsN: 9
 };
 let nextPlowTimer=null;
 
 function scheduleNextPlow(delayMs=20000){
-  if(!plow.auto) return;
   clearTimeout(nextPlowTimer);
   nextPlowTimer = setTimeout(()=>{ startPlowPass(); }, delayMs);
 }
@@ -307,24 +301,37 @@ function updatePlow(dt){
   if(!plow.active) return;
   plow.x += plow.speed * dt * plow.dir;
 
-  // чистка
+  // зона чистки
   const center = plow.x + plow.width*0.6;
   const w = plow.blade;
   const i0 = Math.max(0, Math.floor((center - w/2)/binW));
   const i1 = Math.min(bins-1, Math.floor((center + w/2)/binW));
+
+  // агрессивная чистка с переносом массы в сторону движения (вал)
   for(let i=i0;i<=i1;i++){
     const h = heightmap[i]||0;
-    if(h>2){
-      const cleared = Math.min(3.2, h*0.3);
-      heightmap[i] = Math.max(0, h - cleared);
+    if(h>1){
+      const take = Math.min(6.0, h*0.45); // сильнее «срезаем»
+      heightmap[i] = Math.max(0, h - take);
 
-      // снежная пыль вправо по движению
-      for(let k=0;k<3;k++){
+      // переносим часть снега вперёд по движению (вал сбоку)
+      const push = take*0.7; // 70% переносим
+      const pushBins = 4;
+      for(let k=1;k<=pushBins;k++){
+        const j = i + k*plow.dir;
+        if(j>=0 && j<bins){
+          const wj = (pushBins - (k-1))/pushBins; // уменьшаем с расстоянием
+          heightmap[j] = Math.min(groundY, (heightmap[j]||0) + push*wj*0.25);
+        }
+      }
+
+      // «пыль»/искры
+      for(let s=0;s<3;s++){
         spray.push({
           x: i*binW + Math.random()*binW,
-          y: fieldYAt(i*binW) - 4 - Math.random()*6,
-          vx: (220+Math.random()*120)*plow.dir,
-          vy: -(260+Math.random()*160),
+          y: fieldYAt(i*binW) - 6 - Math.random()*8,
+          vx: (260+Math.random()*140)*plow.dir,
+          vy: -(280+Math.random()*180),
           r: 1.2 + Math.random()*1.6,
           life: 0.5 + Math.random()*0.7,
           maxLife: 1.0 + Math.random()*0.9
@@ -336,64 +343,110 @@ function updatePlow(dt){
   // конец проезда
   if(plow.x > canvas.clientWidth + 80){
     plow.active = false;
-    scheduleNextPlow(20000); // следующий через 20с
+    scheduleNextPlow(20000);
   }
 }
+
+/* красивый плуг */
 function drawPlow(targetCtx, t){
   if(!plow.active) return;
   const y = groundY - 6;
-
   targetCtx.save();
   targetCtx.translate(plow.x, y);
 
-  // корпус (санно-гусеничный стиль)
-  targetCtx.fillStyle = plow.color1;
-  targetCtx.fillRect(0, -plow.height, plow.width*0.6, plow.height-10); // база
-  targetCtx.fillRect(plow.width*0.42, -plow.height*1.25, plow.width*0.34, plow.height*0.85); // кабина
+  // Тень
+  targetCtx.fillStyle='rgba(0,0,0,0.25)';
+  targetCtx.beginPath();
+  targetCtx.ellipse(plow.width*0.35, 6, plow.width*0.38, 10, 0, 0, Math.PI*2);
+  targetCtx.fill();
+
+  // Корпус (градиент)
+  const grd = targetCtx.createLinearGradient(0, -plow.height, 0, 0);
+  grd.addColorStop(0, '#ff4d4d');
+  grd.addColorStop(1, '#b31212');
+  targetCtx.fillStyle = grd;
+  targetCtx.strokeStyle = 'rgba(255,255,255,0.25)';
+  targetCtx.lineWidth = 2;
+
+  // база
+  targetCtx.beginPath();
+  targetCtx.roundRect(0, -plow.height, plow.width*0.62, plow.height-10, 8);
+  targetCtx.fill(); targetCtx.stroke();
+
+  // кабина
+  targetCtx.beginPath();
+  targetCtx.roundRect(plow.width*0.44, -plow.height*1.26, plow.width*0.36, plow.height*0.9, 8);
+  targetCtx.fill(); targetCtx.stroke();
 
   // окно
-  targetCtx.fillStyle='rgba(255,255,255,0.65)';
-  targetCtx.fillRect(plow.width*0.46, -plow.height*1.18, plow.width*0.25, plow.height*0.5);
-
-  // отвал «праздничный»
-  targetCtx.fillStyle=plow.color2;
+  targetCtx.fillStyle='rgba(255,255,255,0.7)';
   targetCtx.beginPath();
-  targetCtx.moveTo(plow.width*0.6, -plow.height*0.15);
-  targetCtx.lineTo(plow.width*0.6 + plow.blade, -plow.height*0.55);
-  targetCtx.lineTo(plow.width*0.6 + plow.blade, 0);
-  targetCtx.closePath(); targetCtx.fill();
+  targetCtx.roundRect(plow.width*0.48, -plow.height*1.18, plow.width*0.26, plow.height*0.52, 6);
+  targetCtx.fill();
+
+  // отвал «леденец» с полосками
+  targetCtx.save();
+  targetCtx.translate(plow.width*0.62, -plow.height*0.12);
+  targetCtx.fillStyle='#ffd200';
+  targetCtx.beginPath();
+  targetCtx.moveTo(0, 0);
+  targetCtx.lineTo(plow.blade, -plow.height*0.55);
+  targetCtx.lineTo(plow.blade, 10);
+  targetCtx.closePath();
+  targetCtx.fill();
+
+  // полоски
+  targetCtx.strokeStyle='rgba(255,0,0,0.55)';
+  targetCtx.lineWidth=6;
+  for(let x=8; x<plow.blade; x+=16){
+    targetCtx.beginPath();
+    targetCtx.moveTo(x, -plow.height*0.5);
+    targetCtx.lineTo(x, 6);
+    targetCtx.stroke();
+  }
+  targetCtx.restore();
 
   // гусеницы
   targetCtx.fillStyle='#222';
-  targetCtx.fillRect(plow.width*0.05, -10, plow.width*0.5, 12);
+  targetCtx.beginPath();
+  targetCtx.roundRect(plow.width*0.06, -10, plow.width*0.52, 12, 6);
+  targetCtx.fill();
   // ролики
   for(let i=0;i<4;i++){
     targetCtx.beginPath();
-    targetCtx.arc(plow.width*(0.1+0.1*i), -4, 6, 0, Math.PI*2);
+    targetCtx.arc(plow.width*(0.12+0.1*i), -4, 6, 0, Math.PI*2);
     targetCtx.fill();
   }
 
   // гирлянда на крыше — мигает
   const L = plow.lightsN;
   for(let i=0;i<L;i++){
-    const lx = plow.width*0.45 + (i/(L-1))*plow.width*0.28;
-    const ly = -plow.height*1.25 - 6 + Math.sin((i/2)+t*0.006)*2;
+    const lx = plow.width*0.46 + (i/(L-1))*plow.width*0.28;
+    const ly = -plow.height*1.28 - 6 + Math.sin((i/2)+t*0.006)*2;
     const phase = (i%2===0?0:Math.PI);
     const k = 0.6 + 0.4*Math.max(0,Math.sin(t*0.008 + phase));
     targetCtx.fillStyle = `rgba(${Math.round(255*k)}, ${Math.round(80+140*k)}, ${Math.round(80)}, 0.95)`;
     targetCtx.beginPath(); targetCtx.arc(lx, ly, 3, 0, Math.PI*2); targetCtx.fill();
   }
 
-  // «шапка Санты» на кабине (треугольник)
+  // «шапка Санты»
   targetCtx.fillStyle='#e53935';
   targetCtx.beginPath();
-  targetCtx.moveTo(plow.width*0.56, -plow.height*1.28);
-  targetCtx.lineTo(plow.width*0.68, -plow.height*1.55);
-  targetCtx.lineTo(plow.width*0.72, -plow.height*1.28);
+  targetCtx.moveTo(plow.width*0.56, -plow.height*1.30);
+  targetCtx.lineTo(plow.width*0.68, -plow.height*1.58);
+  targetCtx.lineTo(plow.width*0.74, -plow.height*1.30);
   targetCtx.closePath(); targetCtx.fill();
   targetCtx.fillStyle='#fff';
-  targetCtx.beginPath(); targetCtx.arc(plow.width*0.68, -plow.height*1.55, 4, 0, Math.PI*2); targetCtx.fill();
-  targetCtx.fillRect(plow.width*0.56, -plow.height*1.28, plow.width*0.16, 4);
+  targetCtx.beginPath(); targetCtx.arc(plow.width*0.68, -plow.height*1.58, 4, 0, Math.PI*2); targetCtx.fill();
+  targetCtx.fillRect(plow.width*0.56, -plow.height*1.30, plow.width*0.18, 4);
+
+  // пар из выхлопа
+  for(let i=0;i<4;i++){
+    const px = plow.width*0.02 + i*8;
+    const py = -plow.height + 8 - i*6 + Math.sin((t+i*120)*0.01)*2;
+    targetCtx.fillStyle='rgba(255,255,255,0.25)';
+    targetCtx.beginPath(); targetCtx.arc(px, py, 3, 0, Math.PI*2); targetCtx.fill();
+  }
 
   targetCtx.restore();
 }
@@ -422,13 +475,18 @@ function loop(t){
 
   ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
   renderVideo(ctx);
-  drawSnow(ctx);
+
+  // ВАЖНО: порядок слоёв — сугробы → плуг → снежинки
+  drawDrifts(ctx);
   drawPlow(ctx, t);
+  drawSpray(ctx);
+  drawFlakes(ctx);
 
   requestAnimationFrame(loop);
 }
 
 /* ------------ старт ------------ */
+let nextPlowTimer;
 async function start(){
   try{
     let stream;
@@ -454,8 +512,8 @@ async function start(){
     requestAnimationFrame(loop);
     if(musicEnabled) startMusic();
 
-    // автопроезд плуга каждые 20с (по умолчанию включен)
-    scheduleNextPlow(2000); // первый старт через 2с, дальше каждые 20с после завершения
+    // автопроезд плуга: первый через 2с, затем по завершению — каждые 20с
+    scheduleNextPlow(2000);
   }catch(e){ alert('Не удалось открыть камеру: '+e.message); }
 }
 startBtn.addEventListener('click', start);
@@ -465,21 +523,16 @@ function updateTogglesUI(){
   btnSnow.classList.toggle('is-on',snowEnabled);  btnSnow.setAttribute('aria-pressed',String(snowEnabled));
   btnMascot.classList.toggle('is-on',mascotEnabled); btnMascot.setAttribute('aria-pressed',String(mascotEnabled));
   btnMusic.classList.toggle('is-on',musicEnabled);  btnMusic.setAttribute('aria-pressed',String(musicEnabled));
-  btnPlow.classList.toggle('is-on',plow.auto);      btnPlow.setAttribute('aria-pressed',String(plow.auto));
+  btnPlow.classList.toggle('is-on',true);          btnPlow.setAttribute('aria-pressed','true'); // авто включён всегда
   mascot.style.display = running && mascotEnabled ? 'block' : 'none';
   if(navigator.vibrate) navigator.vibrate(8);
 }
 btnSnow.addEventListener('click',()=>{ snowEnabled=!snowEnabled; updateTogglesUI(); });
 btnMascot.addEventListener('click',()=>{ mascotEnabled=!mascotEnabled; updateTogglesUI(); });
 btnMusic.addEventListener('click',async()=>{ musicEnabled=!musicEnabled; updateTogglesUI(); if(musicEnabled) await startMusic(); else stopMusic(); });
-btnPlow.addEventListener('click',()=>{
-  plow.auto = !plow.auto;
-  if(plow.auto && !plow.active) scheduleNextPlow(20000);
-  else clearTimeout(nextPlowTimer);
-  updateTogglesUI();
-});
+btnPlow.addEventListener('click',()=>{ startPlowPass(); }); // нажал — плуг поехал сразу
 
-/* ------------ фото (всё попадает) ------------ */
+/* ------------ фото (тот же порядок слоёв) ------------ */
 shotBtn.addEventListener('click', async ()=>{
   flash.classList.add('go'); setTimeout(()=>flash.classList.remove('go'),60);
 
@@ -489,8 +542,10 @@ shotBtn.addEventListener('click', async ()=>{
   const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
 
   renderVideo(sctx);
-  drawSnow(sctx);
+  drawDrifts(sctx);
   drawPlow(sctx, performance.now());
+  drawSpray(sctx);
+  drawFlakes(sctx);
   if(mascotEnabled && mascotImg.complete){
     const rC=canvas.getBoundingClientRect(), rM=mascot.getBoundingClientRect();
     const mx=(rM.left-rC.left), my=(rM.top-rC.top), mw=rM.width, mh=rM.height;
