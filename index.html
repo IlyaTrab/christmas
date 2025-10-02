@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Snow Cam</title>
 
-  <!-- СНЕГ Alaev-Co -->
-  <link href="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/snow.min.css" rel="stylesheet">
-  <script defer src="https://cdn.jsdelivr.net/gh/Alaev-Co/snowflakes/dist/Snow.min.js"></script>
-
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Snow Cam">
   <meta name="theme-color" content="#000000">
@@ -17,7 +13,7 @@
     :root{
       --fab-size:56px; --fab-gap:.6rem;
       --glass-bg:rgba(255,255,255,.12); --glass-brd:rgba(255,255,255,.28); --glass-on:rgba(255,255,255,.22);
-      /* высота «земли» (куда накапливаются сугробы) */
+      /* высота «земли», над которой накапливаются сугробы (подстрой под свои кнопки) */
       --ground-offset: 88px;
     }
 
@@ -28,23 +24,6 @@
     canvas{z-index:2}
     *{-webkit-tap-highlight-color:transparent}
 
-    /* Снежные слои библиотеки */
-    .snowflakes-box{
-      position:fixed !important;
-      inset:0 !important;
-      z-index:4 !important;
-      pointer-events:none !important;
-    }
-    .snowball-box{
-      position:fixed !important;
-      left:0 !important; right:0 !important;
-      bottom:var(--ground-offset) !important; /* поднимаем «землю» */
-      z-index:4 !important;
-      pointer-events:none !important;
-    }
-    body.no-snow .snowflakes-box,
-    body.no-snow .snowball-box{ display:none !important; }
-
     /* маскот (снеговик) */
     #mascot{
       position:absolute; left:1rem; bottom:4.8rem; z-index:5; display:none;
@@ -54,7 +33,7 @@
     #mascot.dragging{cursor:grabbing;}
     #mascot img{display:block;width:100%;height:auto;pointer-events:none}
 
-    /* бренд/панель (скрыты до старта) */
+    /* бренд и панель (скрыты до старта) */
     #brand{
       position:fixed; top:.8rem; left:50%; transform:translateX(-50%);
       font:600 18px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
@@ -101,18 +80,23 @@
 
   <div id="controls" aria-label="Управление">
     <button id="btnSnow" class="fab is-on" type="button" aria-pressed="true" title="Снег">
+      <!-- снежинка -->
       <svg viewBox="0 0 24 24"><path d="M12 2v20M12 12L21 7M12 12L3 7M12 12l9 5M12 12L3 17M2 12h20M7 4l3 1.8M17 4l-3 1.8M7 20l3-1.8M17 20l-3-1.8"/></svg>
     </button>
     <button id="btnMascot" class="fab is-on" type="button" aria-pressed="true" title="Снеговик">
+      <!-- снеговик -->
       <svg viewBox="0 0 24 24"><g transform="translate(0.5 0.5)"><circle cx="12" cy="15.5" r="5"/><circle cx="12" cy="8" r="3.2"/><path d="M6.2 12.5L4 11M17.8 12.5L20 11"/><path d="M9.4 6.6h5.2M9 6l6-.6"/></g></svg>
     </button>
     <button id="btnMusic" class="fab is-on" type="button" aria-pressed="true" title="Музыка">
+      <!-- нота -->
       <svg viewBox="0 0 24 24"><path d="M9 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM17 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M9 12V5l10-2v7"/></svg>
     </button>
-    <button id="btnAR" class="fab" type="button" title="AR">
-      <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7l9-5z"/><path d="M12 2v20M3 7l9 5 9-5"/></svg>
+    <button id="btnPlow" class="fab" type="button" aria-pressed="false" title="Уборочная машина">
+      <!-- снегоуборщик -->
+      <svg viewBox="0 0 24 24"><path d="M3 14h9l3-3h3l3 5v3H3z"/><circle cx="8" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/></svg>
     </button>
     <button id="shotBtn" class="fab" type="button" title="Сделать фото">
+      <!-- камера -->
       <svg viewBox="0 0 24 24"><path d="M4 8h3l1.6-2.2c.2-.3.5-.5.9-.5h4.9c.4 0 .7.2.9.5L17 8h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="14" r="3.2"/></svg>
     </button>
   </div>
@@ -128,7 +112,7 @@ const shotBtn =document.getElementById('shotBtn');
 const btnSnow =document.getElementById('btnSnow');
 const btnMascot=document.getElementById('btnMascot');
 const btnMusic=document.getElementById('btnMusic');
-const btnAR   =document.getElementById('btnAR');
+const btnPlow =document.getElementById('btnPlow');
 const controls=document.getElementById('controls');
 const flash   =document.getElementById('flash');
 const brand   =document.getElementById('brand');
@@ -142,8 +126,7 @@ const DPR=Math.min(window.devicePixelRatio||1,2);
 const CAPTURE_DPR=DPR;
 
 /* state */
-let running=false, snowEnabled=true, mascotEnabled=true, musicEnabled=true;
-let snowInstance=null;
+let running=false, snowEnabled=true, mascotEnabled=true, musicEnabled=true, plowEnabled=false;
 
 /* ===== музыка ===== */
 let bgm=null, audioCtx=null, gain=null;
@@ -157,21 +140,266 @@ function stopMusic(){ fadeTo(0.0,0.4); setTimeout(()=>{try{bgm.pause();}catch(_)
 function fadeTo(target,dur){ if(gain&&audioCtx){ const now=audioCtx.currentTime; gain.gain.cancelScheduledValues(now); gain.gain.setValueAtTime(gain.gain.value,now); gain.gain.linearRampToValueAtTime(target, now+dur); }
   else if(bgm){ const from=bgm.volume, steps=Math.max(1,Math.floor(dur*30)); let i=0; const t=setInterval(()=>{ i++; bgm.volume=from+(target-from)*i/steps; if(i>=steps) clearInterval(t); },33);} }
 
-/* ===== визуал ===== */
-function resize(){ canvas.width=Math.floor(canvas.clientWidth*DPR); canvas.height=Math.floor(canvas.clientHeight*DPR); ctx.setTransform(DPR,0,0,DPR,0,0); }
-window.addEventListener('resize', resize);
+/* ===== СНЕГ НА CANVAS ===== */
+let flakes=[], sprites=[], heightmap=[], binW=4, bins=0, groundY=0;
+const spray=[]; // «разлёт» снега от снегоуборщика
 
-function renderFrame(targetCtx,{includeMascot=false}={}){
-  const W=canvas.clientWidth,H=canvas.clientHeight;
-  try{ targetCtx.drawImage(video,0,0,W,H);}catch(_){}
-  targetCtx.fillStyle='rgba(255,255,255,.015)'; targetCtx.fillRect(0,0,W,H);
-  if(includeMascot && mascotEnabled && mascotImg.complete){
-    const rC=canvas.getBoundingClientRect(), rM=mascot.getBoundingClientRect();
-    const mx=(rM.left-rC.left), my=(rM.top-rC.top), mw=rM.width, mh=rM.height;
-    try{ targetCtx.drawImage(mascotImg,mx,my,mw,mh);}catch(_){}
+function cssPx(varName, fallback){
+  const v=getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  const m=/(-?\d+(\.\d+)?)px/.exec(v); return m?parseFloat(m[1]):fallback;
+}
+
+function makeFlakeSprite(size){
+  const s=Math.max(10,size|0);
+  const off=document.createElement('canvas'); off.width=off.height=s;
+  const c=off.getContext('2d');
+  const g=c.createRadialGradient(s/2,s/2,s*0.02,s/2,s/2,s*0.5);
+  g.addColorStop(0,'rgba(255,255,255,.95)');
+  g.addColorStop(.6,'rgba(255,255,255,.35)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  c.fillStyle=g; c.beginPath(); c.arc(s/2,s/2,s*0.5,0,Math.PI*2); c.fill();
+  return off;
+}
+function buildSprites(){ sprites=[makeFlakeSprite(16),makeFlakeSprite(14),makeFlakeSprite(12),makeFlakeSprite(10)]; }
+
+function initField(){
+  const W=canvas.clientWidth, H=canvas.clientHeight;
+  const offset = cssPx('--ground-offset', 88);
+  groundY = H - offset; // базовая «земля»
+  binW = 4; bins = Math.ceil(W/binW);
+  heightmap = new Array(bins).fill(0);
+}
+
+function spawnFlakes(){
+  const area=canvas.clientWidth*canvas.clientHeight;
+  const n = Math.max(90, Math.floor(area/15000));
+  flakes = new Array(n).fill(0).map(()=>({
+    x: Math.random()*canvas.clientWidth,
+    y: -Math.random()*canvas.clientHeight,
+    r: 1.2 + Math.random()*2.6,
+    vy: 0.7 + Math.random()*1.1,
+    swayA: 6 + Math.random()*10,
+    theta: Math.random()*Math.PI*2,
+    swaySpeed: 0.012 + Math.random()*0.018,
+    sprite: sprites[(Math.random()*sprites.length)|0]
+  }));
+}
+
+function fieldYAt(x){
+  const idx = Math.max(0, Math.min(bins-1, Math.floor(x/binW)));
+  // линейная интерполяция между центрами бинов
+  const x0 = idx*binW, x1 = Math.min((idx+1)*binW, bins*binW);
+  const h0 = heightmap[idx]||0, h1 = heightmap[Math.min(idx+1,bins-1)]||0;
+  const t = (x - x0)/Math.max(1,(x1-x0));
+  const h = h0*(1-t)+h1*t;
+  return groundY - h;
+}
+
+function addSnowAt(x, amount){
+  const idx = Math.max(0, Math.min(bins-1, Math.floor(x/binW)));
+  const spread = 2; // немного размазываем по соседям, чтобы получалась «волна»
+  for(let k=-spread;k<=spread;k++){
+    const i = idx + k; if(i<0||i>=bins) continue;
+    const w = 1 - Math.abs(k)/(spread+1);
+    heightmap[i] = Math.min(groundY, heightmap[i] + amount*w);
   }
 }
-function loop(){ if(!running) return; ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight); renderFrame(ctx,{includeMascot:false}); requestAnimationFrame(loop); }
+
+function updateSnow(dt){
+  if(!snowEnabled) return;
+
+  // падение снежинок
+  for(const f of flakes){
+    f.theta += f.swaySpeed;
+    const vx = Math.sin(f.theta)*0.35;
+    f.y += f.vy*dt; f.x += vx*dt*60;
+    if(f.x < -5) f.x = canvas.clientWidth+5;
+    if(f.x > canvas.clientWidth+5) f.x = -5;
+
+    const yTop = fieldYAt(f.x);
+    if(f.y + f.r >= yTop){
+      // прилипает: добавляем массу в поле и переиспользуем снежинку
+      addSnowAt(f.x, 0.6 + f.r*0.9);
+      f.x = Math.random()*canvas.clientWidth;
+      f.y = -10 - Math.random()*canvas.clientHeight*0.2;
+      f.theta = Math.random()*Math.PI*2;
+    }
+  }
+
+  // частицы «разлёта» от плуга
+  for(let i=spray.length-1;i>=0;i--){
+    const p=spray[i];
+    p.vy += 0.15*dt*60; // гравитация
+    p.x += p.vx*dt*60; p.y += p.vy*dt*60;
+    p.life -= dt;
+    if(p.y >= fieldYAt(p.x)){ addSnowAt(p.x, 0.4); spray.splice(i,1); continue; }
+    if(p.life<=0) spray.splice(i,1);
+  }
+
+  // лёгкое сглаживание высоты (ползущая релаксация, чтобы сугроб был мягче)
+  for(let i=1;i<bins-1;i++){
+    const avg = (heightmap[i-1]+heightmap[i]+heightmap[i+1])/3;
+    heightmap[i] = heightmap[i]*0.96 + avg*0.04;
+  }
+}
+
+function drawSnow(targetCtx){
+  if(!snowEnabled) return;
+
+  // падающие снежинки
+  for(const f of flakes){
+    const s=f.sprite, size=f.r*2;
+    targetCtx.drawImage(s, f.x - f.r, f.y - f.r, size, size);
+  }
+
+  // сугробы — рисуем мягким белым силуэтом по высотам
+  const W=canvas.clientWidth, H=canvas.clientHeight;
+  targetCtx.save();
+  // градиент лёгкой подсветки сверху сугроба
+  const grad = targetCtx.createLinearGradient(0, groundY-80, 0, groundY+10);
+  grad.addColorStop(0,'rgba(255,255,255,0.95)');
+  grad.addColorStop(1,'rgba(255,255,255,0.85)');
+  targetCtx.fillStyle=grad;
+
+  targetCtx.beginPath();
+  targetCtx.moveTo(0,H);
+  targetCtx.lineTo(0, groundY - (heightmap[0]||0));
+  for(let i=1;i<bins;i++){
+    const x=i*binW;
+    const y=groundY - (heightmap[i]||0);
+    // сглаженная полилиния
+    targetCtx.lineTo(x, y);
+  }
+  targetCtx.lineTo(W, H);
+  targetCtx.closePath();
+  targetCtx.fill();
+
+  // «искры» от снегоуборщика
+  for(const p of spray){
+    targetCtx.globalAlpha = Math.max(0, p.life/p.maxLife);
+    targetCtx.beginPath();
+    targetCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    targetCtx.fillStyle='white';
+    targetCtx.fill();
+  }
+  targetCtx.globalAlpha = 1;
+
+  targetCtx.restore();
+}
+
+/* ===== СНЕГОУБОРОЧНАЯ МАШИНА ===== */
+const plow = {
+  enabled:false, x:-120, dir:1, speed: 2.2, // px/frame
+  width: 120, height: 40,
+  blade: 90, // ширина ножа
+  color: '#f5a623'
+};
+function togglePlow(){
+  plow.enabled = !plow.enabled;
+  updateTogglesUI();
+}
+function updatePlow(){
+  if(!plow.enabled) return;
+  plow.x += plow.speed*plow.dir;
+  const W=canvas.clientWidth;
+
+  // чистка высот на ширине ножа
+  const center = plow.x + plow.width*0.6;
+  const w = plow.blade;
+  const i0 = Math.max(0, Math.floor((center - w/2)/binW));
+  const i1 = Math.min(bins-1, Math.floor((center + w/2)/binW));
+  for(let i=i0;i<=i1;i++){
+    const h = heightmap[i]||0;
+    if(h>2){
+      // выкидываем часть массы в «спрей»
+      const cleared = Math.min(2.8, h*0.25);
+      heightmap[i] = Math.max(0, h - cleared);
+
+      // разброс вправо по направлению движения
+      for(let k=0;k<2;k++){
+        spray.push({
+          x: i*binW + Math.random()*binW,
+          y: fieldYAt(i*binW) - 4 - Math.random()*6,
+          vx: 2.0*plow.dir + Math.random()*1.5*plow.dir,
+          vy: - (1.8 + Math.random()*1.2),
+          r: 1.2 + Math.random()*1.2,
+          life: 0.9 + Math.random()*0.7,
+          maxLife: 1.6
+        });
+      }
+    }
+  }
+
+  if(plow.x > W + 40){ plow.dir = -1; }
+  if(plow.x < -plow.width - 40){ plow.dir = 1; }
+}
+function drawPlow(targetCtx){
+  if(!plow.enabled) return;
+  const y = groundY - 10; // едет прямо над грунтом
+  targetCtx.save();
+  targetCtx.translate(plow.x, y);
+
+  // кузов
+  targetCtx.fillStyle = plow.color;
+  targetCtx.fillRect(0, -plow.height, plow.width*0.6, plow.height-8);
+
+  // кабина
+  targetCtx.fillRect(plow.width*0.45, -plow.height*1.2, plow.width*0.3, plow.height*0.8);
+  targetCtx.fillStyle='rgba(255,255,255,0.6)';
+  targetCtx.fillRect(plow.width*0.49, -plow.height*1.15, plow.width*0.22, plow.height*0.5);
+
+  // нож-отвал (треугольник)
+  targetCtx.fillStyle='#ffd200';
+  targetCtx.beginPath();
+  if(plow.dir>=0){
+    targetCtx.moveTo(plow.width*0.6, -plow.height*0.2);
+    targetCtx.lineTo(plow.width*0.6 + plow.blade, -plow.height*0.5);
+    targetCtx.lineTo(plow.width*0.6 + plow.blade, 0);
+  }else{
+    targetCtx.moveTo(plow.width*0.6, -plow.height*0.2);
+    targetCtx.lineTo(plow.width*0.6 - plow.blade, -plow.height*0.5);
+    targetCtx.lineTo(plow.width*0.6 - plow.blade, 0);
+  }
+  targetCtx.closePath(); targetCtx.fill();
+
+  // колёса
+  targetCtx.fillStyle='#222';
+  targetCtx.beginPath(); targetCtx.arc(plow.width*0.2, -6, 10, 0, Math.PI*2); targetCtx.fill();
+  targetCtx.beginPath(); targetCtx.arc(plow.width*0.5, -6, 10, 0, Math.PI*2); targetCtx.fill();
+
+  targetCtx.restore();
+}
+
+/* ===== визуал цикла ===== */
+function resize(){
+  canvas.width=Math.floor(canvas.clientWidth*DPR);
+  canvas.height=Math.floor(canvas.clientHeight*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  initField();
+}
+window.addEventListener('resize', resize);
+
+function renderVideo(targetCtx){
+  try{ targetCtx.drawImage(video,0,0,canvas.clientWidth,canvas.clientHeight);}catch(_){}
+  // лёгкая «морозная» вуаль
+  targetCtx.fillStyle='rgba(255,255,255,.015)'; targetCtx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);
+}
+
+let lastT=performance.now();
+function loop(t){
+  if(!running) return;
+  const dt=Math.min(0.05, (t-lastT)/1000); lastT=t;
+
+  updateSnow(dt);
+  updatePlow();
+
+  ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+  renderVideo(ctx);
+  drawSnow(ctx);
+  drawPlow(ctx);
+
+  requestAnimationFrame(loop);
+}
 
 /* ===== старт ===== */
 async function start(){
@@ -187,17 +415,15 @@ async function start(){
     video.srcObject=stream;
     try{ await video.play(); }catch(_){ await new Promise(r=>setTimeout(r,120)); await video.play(); }
 
-    resize(); running=true;
+    resize(); buildSprites(); spawnFlakes();
+    running=true;
 
     brand.style.display='block';
     controls.style.display='flex';
     mascot.style.display = mascotEnabled ? 'block' : 'none';
 
-    if(!snowInstance){
-      snowInstance = new Snow({ showSnowflakes:true, showSnowBalls:true, countSnowflake:90 });
-    }
-
     if(startBtn) startBtn.remove();
+    lastT=performance.now();
     requestAnimationFrame(loop);
     if(musicEnabled) startMusic();
   }catch(e){ alert('Не удалось открыть камеру: '+e.message); }
@@ -209,18 +435,17 @@ function updateTogglesUI(){
   btnSnow.classList.toggle('is-on',snowEnabled);  btnSnow.setAttribute('aria-pressed',String(snowEnabled));
   btnMascot.classList.toggle('is-on',mascotEnabled); btnMascot.setAttribute('aria-pressed',String(mascotEnabled));
   btnMusic.classList.toggle('is-on',musicEnabled); btnMusic.setAttribute('aria-pressed',String(musicEnabled));
-  document.body.classList.toggle('no-snow', !snowEnabled);
+  btnPlow.classList.toggle('is-on',plowEnabled);    btnPlow.setAttribute('aria-pressed',String(plowEnabled));
+  plow.enabled = plowEnabled;
   mascot.style.display = running && mascotEnabled ? 'block' : 'none';
   if(navigator.vibrate) navigator.vibrate(8);
 }
 btnSnow.addEventListener('click',()=>{ snowEnabled=!snowEnabled; updateTogglesUI(); });
 btnMascot.addEventListener('click',()=>{ mascotEnabled=!mascotEnabled; updateTogglesUI(); });
 btnMusic.addEventListener('click',async()=>{ musicEnabled=!musicEnabled; updateTogglesUI(); if(musicEnabled) await startMusic(); else stopMusic(); });
+btnPlow.addEventListener('click',()=>{ plowEnabled=!plowEnabled; updateTogglesUI(); });
 
-/* ===== AR ===== */
-btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
-
-/* ===== фото: камера + СНЕГ + маскот ===== */
+/* ===== фото: камера + CANVAS-снег + маскот ===== */
 shotBtn.addEventListener('click', async ()=>{
   flash.classList.add('go'); setTimeout(()=>flash.classList.remove('go'),60);
 
@@ -229,9 +454,17 @@ shotBtn.addEventListener('click', async ()=>{
   shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
   const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
 
-  renderFrame(sctx,{includeMascot:false});
-  await drawSnowOverlayToCanvas(sctx);   // ←  теперь точно дорисовывает снежинки И сугробы
-  renderFrame(sctx,{includeMascot:true});
+  // видео
+  renderVideo(sctx);
+  // снег и плуг (они в нашем canvas, просто отрисовываем теми же функциями)
+  drawSnow(sctx);
+  drawPlow(sctx);
+  // маскот
+  if(mascotEnabled && mascotImg.complete){
+    const rC=canvas.getBoundingClientRect(), rM=mascot.getBoundingClientRect();
+    const mx=(rM.left-rC.left), my=(rM.top-rC.top), mw=rM.width, mh=rM.height;
+    try{ sctx.drawImage(mascotImg,mx,my,mw,mh);}catch(_){}
+  }
 
   const save=(blob)=>{
     const p=n=>String(n).padStart(2,'0'); const ts=new Date();
@@ -246,122 +479,6 @@ shotBtn.addEventListener('click', async ()=>{
   };
   if(shot.toBlob) shot.toBlob(save,'image/png',0.92);
 });
-
-/* ---------- РЕНДЕР СНЕГА В СНИМОК (DOM → canvas) ---------- */
-const RAF = () => new Promise(r=>requestAnimationFrame(()=>r()));
-
-function unquote(s){ if(!s) return ''; s=String(s).trim(); if(s==='none') return ''; return s.replace(/^["']|["']$/g,''); }
-function cssAlpha(cs){ const a=parseFloat(cs.opacity); return isNaN(a)?1:Math.max(0,Math.min(1,a)); }
-function firstDataUrlFrom(str){
-  if(!str) return null;
-  const m = String(str).match(/url\\(["']?(data:[^"')]+)["']?\\)/i);
-  return m ? m[1] : null;
-}
-function loadImage(src){
-  return new Promise(resolve=>{
-    const img=new Image(); img.crossOrigin='anonymous';
-    img.onload=()=>resolve(img); img.onerror=()=>resolve(null); img.src=src;
-  });
-}
-
-// наносим svg-иконку из data:URL и тонируем под цвет (если нужно)
-async function drawMaskedSvg(ctx2, dataUrl, x, y, w, h, color, alpha=1){
-  const img = await loadImage(dataUrl);
-  if(!img) return;
-  // красим svg под требуемый цвет
-  const off = document.createElement('canvas');
-  off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
-  const octx = off.getContext('2d');
-  octx.drawImage(img, 0, 0, off.width, off.height);
-  octx.globalCompositeOperation = 'source-in';
-  octx.fillStyle = color || '#fff';
-  octx.fillRect(0,0,off.width,off.height);
-
-  ctx2.save();
-  ctx2.globalAlpha = alpha;
-  ctx2.drawImage(off, x, y, w, h);
-  ctx2.restore();
-}
-
-async function drawSnowOverlayToCanvas(ctx2){
-  if (document.body.classList.contains('no-snow')) return;
-
-  // ждём 2 кадра, чтобы CSS-анимации применились (позиции актуальны)
-  await RAF(); await RAF();
-
-  const rC = canvas.getBoundingClientRect();
-  const jobs = [];
-
-  // --- снежинки (элементы + псевдоэлементы) ---
-  const flakeScope = document.querySelectorAll('.snowflakes-box, .snowflakes-box *');
-  flakeScope.forEach(el=>{
-    const rect = el.getBoundingClientRect();
-    const w = rect.width, h = rect.height;
-    if ((w < 1 && h < 1) || !isFinite(w+h)) return;
-
-    const drawFromStyle = async (pseudo) => {
-      const cs = getComputedStyle(el, pseudo);
-      if (cs.display === 'none' || cs.visibility === 'hidden') return;
-
-      const alpha = cssAlpha(cs);
-      const x = (rect.left - rC.left);
-      const y = (rect.top  - rC.top);
-
-      // 1) svg через background-image (data:)
-      let dataUrl = firstDataUrlFrom(cs.backgroundImage);
-      if(!dataUrl){
-        // 2) svg через mask-image / -webkit-mask-image (обычный способ библиотеки)
-        dataUrl = firstDataUrlFrom(cs.webkitMaskImage) || firstDataUrlFrom(cs.maskImage);
-      }
-      if(dataUrl){
-        jobs.push(drawMaskedSvg(ctx2, dataUrl, x, y, w, h, cs.color || '#fff', alpha));
-        return;
-      }
-
-      // 3) текстовая снежинка через content
-      let txt = unquote(cs.content);
-      if (!txt && !pseudo) txt = (el.textContent||'').trim();
-      if (txt){
-        const size = parseFloat(cs.fontSize) || Math.max(w,h,12);
-        ctx2.save();
-        ctx2.globalAlpha = alpha;
-        ctx2.font = `${cs.fontWeight||400} ${Math.round(size)}px ${cs.fontFamily||'Times, serif'}`;
-        ctx2.fillStyle = cs.color || '#fff';
-        ctx2.textAlign = 'center';
-        ctx2.textBaseline = 'middle';
-        ctx2.fillText(txt, x + w/2, y + h/2);
-        ctx2.restore();
-      }
-    };
-
-    jobs.push(drawFromStyle('::after'));
-    jobs.push(drawFromStyle('::before'));
-    jobs.push(drawFromStyle(null));
-  });
-
-  // --- сугробы (круги) ---
-  const balls = document.querySelectorAll('.snowball-box, .snowball-box *');
-  balls.forEach(el=>{
-    const rect = el.getBoundingClientRect();
-    const w = rect.width, h = rect.height;
-    if ((w < 1 && h < 1) || !isFinite(w+h)) return;
-
-    const cs = getComputedStyle(el);
-    const bg = (cs.backgroundColor && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') ? cs.backgroundColor : 'rgba(255,255,255,.95)';
-    const alpha = cssAlpha(cs);
-    const r = Math.min(w, h) / 2;
-    const cx = (rect.left - rC.left) + w/2;
-    const cy = (rect.top  - rC.top ) + h/2;
-
-    ctx2.save();
-    ctx2.globalAlpha = alpha;
-    ctx2.fillStyle = bg;
-    ctx2.beginPath(); ctx2.arc(cx, cy, r, 0, Math.PI*2); ctx2.fill();
-    ctx2.restore();
-  });
-
-  await Promise.all(jobs);
-}
 
 /* iOS: открыть фото во вкладке */
 function openInNewTabAsImage(blob){
@@ -416,9 +533,6 @@ function endPointer(e){
 mascot.addEventListener('pointerup',endPointer,{passive:false});
 mascot.addEventListener('pointercancel',endPointer,{passive:false});
 mascot.addEventListener('pointerleave',endPointer,{passive:false});
-
-/* AR */
-btnAR.addEventListener('click',()=>{ location.href='ar.html?autoplay=1'; });
 </script>
 </body>
 </html>
