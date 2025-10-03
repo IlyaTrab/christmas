@@ -13,8 +13,8 @@
     :root{
       --fab-size:56px; --fab-gap:.6rem;
       --glass-bg:rgba(255,255,255,.12); --glass-brd:rgba(255,255,255,.28); --glass-on:rgba(255,255,255,.22);
-      /* высота «земли», над которой копятся сугробы */
-      --ground-offset: 88px;
+      /* линия "земли" — теперь в самом низу */
+      --ground-offset: 0px;
     }
 
     html,body{margin:0;height:100%;background:#000;overflow:hidden;}
@@ -64,8 +64,6 @@
     #flash.go{opacity:.9}
     #start{position:fixed; left:1rem; right:1rem; bottom:1.2rem; z-index:7; padding:.9rem 1.1rem;
       font:600 16px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; border-radius:.75rem; border:0; background:#fff; cursor:pointer}
-
-    @media (max-width:380px){ :root{ --ground-offset:76px; } }
   </style>
 </head>
 <body>
@@ -153,7 +151,7 @@ function roundRectPath(ctx,x,y,w,h,r=6){
 /* ========== СНЕГ В CANVAS ========== */
 let flakes=[], sprites=[], heightmap=[], binW=4, bins=0, groundY=0;
 const spray=[]; // частицы разлёта
-let nextPlowTimer=null; // одна декларация таймера
+let nextPlowTimer=null;
 
 function cssPx(varName, fallback){
   const v=getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
@@ -174,24 +172,25 @@ function buildSprites(){ sprites=[16,14,12,10].map(makeFlakeSprite); }
 
 function initField(){
   const H=canvas.clientHeight;
-  const offset = cssPx('--ground-offset', 88);
-  groundY = H - offset;
+  const offset = cssPx('--ground-offset', 0);
+  groundY = H - offset;                 // теперь прямо внизу
   binW = 4; bins = Math.ceil(canvas.clientWidth/binW);
   heightmap = new Array(bins).fill(0);
 }
 
 function spawnFlakes(){
+  // меньше хлопьев → медленнее накопление
   const area=canvas.clientWidth*canvas.clientHeight;
-  const n = Math.max(140, Math.min(360, Math.floor(area/8000)));
+  const n = Math.max(100, Math.min(240, Math.floor(area/10000)));
   const H=canvas.clientHeight;
   flakes = new Array(n).fill(0).map(()=>({
     x: Math.random()*canvas.clientWidth,
     y: -Math.random()*H,
-    r: 1.5 + Math.random()*2.8,
-    vy: 90 + Math.random()*120,
-    swayA: 30 + Math.random()*35,
+    r: 1.4 + Math.random()*2.4,
+    vy: 70 + Math.random()*90,          // медленнее падают
+    swayA: 28 + Math.random()*32,
     theta: Math.random()*Math.PI*2,
-    swaySpeed: 1.2 + Math.random()*1.6,
+    swaySpeed: 1.0 + Math.random()*1.4,
     sprite: sprites[(Math.random()*sprites.length)|0]
   }));
 }
@@ -228,31 +227,31 @@ function updateSnow(dt){
 
     const yTop = fieldYAt(f.x);
     if(f.y + f.r >= yTop){
-      addSnowAt(f.x, 4.0 + f.r*2.2);
+      // медленнее накапливаем сугробы
+      addSnowAt(f.x, 1.2 + f.r*0.9);
       f.x = Math.random()*canvas.clientWidth;
       f.y = -10 - Math.random()*canvas.clientHeight*0.4;
       f.theta = Math.random()*Math.PI*2;
     }
   }
 
-  // частицы «спрея» (визуальные) — БЕЗ накопления сугробов
+  // визуальные брызги (без накопления)
   for(let i=spray.length-1;i>=0;i--){
     const p=spray[i];
     p.vy += 1200*dt;
     p.x  += p.vx*dt; p.y += p.vy*dt;
     p.life -= dt;
-    // раньше тут было addSnowAt(...) — убрал, чтобы брызги не создавали валы
     if(p.life<=0 || p.y >= fieldYAt(p.x)) spray.splice(i,1);
   }
 
-  // лёгкое сглаживание сугробов
+  // мягкое сглаживание
   for(let i=1;i<bins-1;i++){
     const avg = (heightmap[i-1]+heightmap[i]+heightmap[i+1])/3;
     heightmap[i] = heightmap[i]*0.97 + avg*0.03;
   }
 }
 
-/* ---- раздельный рендер: сугробы / плуг / снежинки ---- */
+/* ---- рендер: сугробы / плуг / снежинки ---- */
 function drawDrifts(targetCtx){
   if(!snowEnabled) return;
   const W=canvas.clientWidth, H=canvas.clientHeight;
@@ -293,12 +292,12 @@ function drawSpray(targetCtx){
   targetCtx.globalAlpha = 1;
 }
 
-/* ========== НОВОГОДНИЙ ПЛУГ ========== */
+/* ========== НОВОГОДНИЙ ПЛУГ (уменьшен) ========== */
 const plow = {
   active:false, auto:true,
-  x:-220, dir:1, speed: 280, // px/сек
-  width: 180, height: 62,
-  blade: 130,
+  x:-200, dir:1, speed: 280,     // скорость оставил прежней
+  width: 150, height: 52,        // было 180x62 — стало меньше
+  blade: 110,                     // ширина отвала уменьшена пропорционально
   lightsN: 9
 };
 
@@ -322,19 +321,19 @@ function updatePlow(dt){
   const i0 = Math.max(0, Math.floor((center - w/2)/binW));
   const i1 = Math.min(bins-1, Math.floor((center + w/2)/binW));
 
-  // ЧИСТКА БЕЗ «ВАЛОВ»: просто срезаем до нуля (плоско)
+  // чистка без валов — ровно срезаем
   for(let i=i0;i<=i1;i++){
     const h = heightmap[i]||0;
     if(h>0){
-      const take = Math.min(10.0, h); // достаточно, чтобы быстро вычистить
+      const take = Math.min(10.0, h);
       heightmap[i] = Math.max(0, h - take);
-      // брызги — только визуально
+      // визуальные брызги
       for(let s=0;s<2;s++){
         spray.push({
           x: i*binW + Math.random()*binW,
           y: fieldYAt(i*binW) - 6 - Math.random()*8,
-          vx: (220+Math.random()*120)*plow.dir,
-          vy: -(240+Math.random()*150),
+          vx: (200+Math.random()*110)*plow.dir,
+          vy: -(220+Math.random()*140),
           r: 1.0 + Math.random()*1.6,
           life: 0.45 + Math.random()*0.55,
           maxLife: 1.0
@@ -349,21 +348,22 @@ function updatePlow(dt){
   }
 }
 
-/* красивый плуг */
+/* красивый плуг (масштаб от размеров plow) */
 function drawPlow(targetCtx, t){
   if(!plow.active) return;
-  const y = groundY - 6;
+  const W=plow.width, H=plow.height, B=plow.blade;
+  const y = groundY - Math.max(6, H*0.1);
   targetCtx.save();
   targetCtx.translate(plow.x, y);
 
-  // Тень
+  // тень
   targetCtx.fillStyle='rgba(0,0,0,0.25)';
   targetCtx.beginPath();
-  targetCtx.ellipse(180*0.35, 6, 180*0.38, 10, 0, 0, Math.PI*2);
+  targetCtx.ellipse(W*0.35, 6, W*0.38, 10, 0, 0, Math.PI*2);
   targetCtx.fill();
 
-  // Корпус (градиент)
-  const grd = targetCtx.createLinearGradient(0, -62, 0, 0);
+  // корпус (градиент)
+  const grd = targetCtx.createLinearGradient(0, -H, 0, 0);
   grd.addColorStop(0, '#ff4d4d');
   grd.addColorStop(1, '#b31212');
   targetCtx.fillStyle = grd;
@@ -371,34 +371,35 @@ function drawPlow(targetCtx, t){
   targetCtx.lineWidth = 2;
 
   // база
-  roundRectPath(targetCtx, 0, -62, 180*0.62, 52, 8);
+  roundRectPath(targetCtx, 0, -H, W*0.62, H-10, 8);
   targetCtx.fill(); targetCtx.stroke();
 
   // кабина
-  roundRectPath(targetCtx, 180*0.44, -62*1.26, 180*0.36, 62*0.9, 8);
+  roundRectPath(targetCtx, W*0.44, -H*1.26, W*0.36, H*0.9, 8);
   targetCtx.fill(); targetCtx.stroke();
 
   // окно
   targetCtx.fillStyle='rgba(255,255,255,0.7)';
-  roundRectPath(targetCtx, 180*0.48, -62*1.18, 180*0.26, 62*0.52, 6);
+  roundRectPath(targetCtx, W*0.48, -H*1.18, W*0.26, H*0.52, 6);
   targetCtx.fill();
 
-  // отвал «леденец» с полосками
+  // отвал «леденец»
   targetCtx.save();
-  targetCtx.translate(180*0.62, -62*0.12);
+  targetCtx.translate(W*0.62, -H*0.12);
   targetCtx.fillStyle='#ffd200';
   targetCtx.beginPath();
   targetCtx.moveTo(0, 0);
-  targetCtx.lineTo(130, -62*0.55);
-  targetCtx.lineTo(130, 10);
+  targetCtx.lineTo(B, -H*0.55);
+  targetCtx.lineTo(B, 10);
   targetCtx.closePath();
   targetCtx.fill();
 
+  // полоски
   targetCtx.strokeStyle='rgba(255,0,0,0.55)';
   targetCtx.lineWidth=6;
-  for(let x=8; x<130; x+=16){
+  for(let x=8; x<B; x+=16){
     targetCtx.beginPath();
-    targetCtx.moveTo(x, -62*0.5);
+    targetCtx.moveTo(x, -H*0.5);
     targetCtx.lineTo(x, 6);
     targetCtx.stroke();
   }
@@ -406,40 +407,40 @@ function drawPlow(targetCtx, t){
 
   // гусеницы
   targetCtx.fillStyle='#222';
-  roundRectPath(targetCtx, 180*0.06, -10, 180*0.52, 12, 6);
+  roundRectPath(targetCtx, W*0.06, -10, W*0.52, 12, 6);
   targetCtx.fill();
   for(let i=0;i<4;i++){
     targetCtx.beginPath();
-    targetCtx.arc(180*(0.12+0.1*i), -4, 6, 0, Math.PI*2);
+    targetCtx.arc(W*(0.12+0.1*i), -4, 6, 0, Math.PI*2);
     targetCtx.fill();
   }
 
   // гирлянда
-  const L = 9;
+  const L = plow.lightsN;
   for(let i=0;i<L;i++){
-    const lx = 180*0.46 + (i/(L-1))*180*0.28;
-    const ly = -62*1.28 - 6 + Math.sin((i/2)+t*0.006)*2;
+    const lx = W*0.46 + (i/(L-1))*W*0.28;
+    const ly = -H*1.28 - 6 + Math.sin((i/2)+t*0.006)*2;
     const phase = (i%2===0?0:Math.PI);
     const k = 0.6 + 0.4*Math.max(0,Math.sin(t*0.008 + phase));
     targetCtx.fillStyle = `rgba(${Math.round(255*k)}, ${Math.round(80+140*k)}, ${Math.round(80)}, 0.95)`;
     targetCtx.beginPath(); targetCtx.arc(lx, ly, 3, 0, Math.PI*2); targetCtx.fill();
   }
 
-  // «шапка Санты»
+  // шапка Санты
   targetCtx.fillStyle='#e53935';
   targetCtx.beginPath();
-  targetCtx.moveTo(180*0.56, -62*1.30);
-  targetCtx.lineTo(180*0.68, -62*1.58);
-  targetCtx.lineTo(180*0.74, -62*1.30);
+  targetCtx.moveTo(W*0.56, -H*1.30);
+  targetCtx.lineTo(W*0.68, -H*1.58);
+  targetCtx.lineTo(W*0.74, -H*1.30);
   targetCtx.closePath(); targetCtx.fill();
   targetCtx.fillStyle='#fff';
-  targetCtx.beginPath(); targetCtx.arc(180*0.68, -62*1.58, 4, 0, Math.PI*2); targetCtx.fill();
-  targetCtx.fillRect(180*0.56, -62*1.30, 180*0.18, 4);
+  targetCtx.beginPath(); targetCtx.arc(W*0.68, -H*1.58, 4, 0, Math.PI*2); targetCtx.fill();
+  targetCtx.fillRect(W*0.56, -H*1.30, W*0.18, 4);
 
   // пар
   for(let i=0;i<4;i++){
-    const px = 180*0.02 + i*8;
-    const py = -62 + 8 - i*6 + Math.sin((t+i*120)*0.01)*2;
+    const px = W*0.02 + i*8;
+    const py = -H + 8 - i*6 + Math.sin((t+i*120)*0.01)*2;
     targetCtx.fillStyle='rgba(255,255,255,0.25)';
     targetCtx.beginPath(); targetCtx.arc(px, py, 3, 0, Math.PI*2); targetCtx.fill();
   }
@@ -538,7 +539,6 @@ shotBtn.addEventListener('click', async ()=>{
   shot.width=Math.floor(W*CAPTURE_DPR); shot.height=Math.floor(H*CAPTURE_DPR);
   const sctx=shot.getContext('2d'); sctx.setTransform(CAPTURE_DPR,0,0,CAPTURE_DPR,0,0);
 
-  // порядок слоёв как в live
   renderVideo(sctx);
   drawDrifts(sctx);
   drawPlow(sctx, performance.now());
