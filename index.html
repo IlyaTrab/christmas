@@ -70,7 +70,7 @@
   <div id="wrap">
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
-    <div id="mascot"><img id="mascotImg" src="assets/snowman.gif" alt="Snowman" draggable="false"></div>
+    <div id="mascot"><img id="mascotImg" src="assets/snowwman.gif" alt="Snowman" draggable="false"></div>
   </div>
 
   <div id="flash"></div>
@@ -301,7 +301,7 @@ const plow = {
   lightsN: 9
 };
 
-function scheduleNextPlow(delayMs=20000){
+function scheduleNextPlow(delayMs=30000){
   clearTimeout(nextPlowTimer);
   nextPlowTimer = setTimeout(()=>{ startPlowPass(); }, delayMs);
 }
@@ -344,7 +344,7 @@ function updatePlow(dt){
 
   if(plow.x > canvas.clientWidth + 80){
     plow.active = false;
-    scheduleNextPlow(20000);
+    scheduleNextPlow(30000);
   }
 }
 
@@ -508,8 +508,8 @@ async function start(){
     requestAnimationFrame(loop);
     if(musicEnabled) startMusic();
 
-    // автопроезд плуга: первый через 2с, затем — каждые 20с
-    scheduleNextPlow(2000);
+    // автопроезд плуга: первый через 2с, затем — каждые 30с
+    scheduleNextPlow(10000);
   }catch(e){
     alert('Не удалось открыть камеру: '+e.message);
   }
